@@ -5,6 +5,7 @@ import (
 	"expvar"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -15,26 +16,25 @@ import (
 	"time"
 	"unicode"
 
-	"io/ioutil"
-
 	"github.com/facebookgo/grace/gracehttp"
 	"github.com/facebookgo/pidfile"
+	"github.com/gorilla/handlers"
+	"github.com/lomik/zapwriter"
+	"github.com/peterbourgon/g2g"
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
+
 	"github.com/go-graphite/carbonapi/cache"
 	"github.com/go-graphite/carbonapi/carbonapipb"
+	"github.com/go-graphite/carbonapi/expr/functions"
 	"github.com/go-graphite/carbonapi/expr/functions/cairo/png"
 	"github.com/go-graphite/carbonapi/expr/helper"
+	"github.com/go-graphite/carbonapi/expr/rewrite"
 	"github.com/go-graphite/carbonapi/mstats"
+	"github.com/go-graphite/carbonapi/pkg/features"
 	"github.com/go-graphite/carbonapi/pkg/parser"
 	zipperCfg "github.com/go-graphite/carbonapi/zipper/config"
 	zipperTypes "github.com/go-graphite/carbonapi/zipper/types"
-	"github.com/gorilla/handlers"
-	"github.com/peterbourgon/g2g"
-	"github.com/spf13/viper"
-
-	"github.com/go-graphite/carbonapi/expr/functions"
-	"github.com/go-graphite/carbonapi/expr/rewrite"
-	"github.com/lomik/zapwriter"
-	"go.uber.org/zap"
 )
 
 var apiMetrics = struct {
@@ -191,6 +191,7 @@ var config = struct {
 	DefaultColors              map[string]string  `mapstructure:"defaultColors"`
 	GraphTemplates             string             `mapstructure:"graphTemplates"`
 	FunctionsConfigs           map[string]string  `mapstructure:"functionsConfig"`
+	FeatureFlags               map[string]bool    `mapstructure:"featureFlags"`
 
 	queryCache cache.BytesCache
 	findCache  cache.BytesCache
@@ -285,6 +286,18 @@ func setUpConfig(logger *zap.Logger) {
 			zap.Any("configuration", config.Logger),
 			zap.Error(err),
 		)
+	}
+
+	flags := features.GetFeaturesInstance()
+	for flag, value := range config.FeatureFlags {
+		err := flags.SetFlagByNameForced(flag, value)
+		if err != nil {
+			logger.Warn("failed to set feature flag",
+				zap.String("flag", flag),
+				zap.Bool("value", value),
+				zap.Error(err),
+			)
+		}
 	}
 
 	if config.GraphTemplates != "" {
