@@ -10,21 +10,21 @@ import (
 	"time"
 
 	pickle "github.com/lomik/og-rek"
+	"github.com/lomik/zapwriter"
 	"github.com/satori/go.uuid"
+	"go.uber.org/zap"
 
 	"github.com/go-graphite/carbonapi/carbonapipb"
 	"github.com/go-graphite/carbonapi/date"
 	"github.com/go-graphite/carbonapi/expr"
 	"github.com/go-graphite/carbonapi/expr/functions/cairo/png"
+	"github.com/go-graphite/carbonapi/expr/metadata"
 	"github.com/go-graphite/carbonapi/expr/types"
 	"github.com/go-graphite/carbonapi/intervalset"
+	"github.com/go-graphite/carbonapi/pkg/features"
 	"github.com/go-graphite/carbonapi/pkg/parser"
 	util "github.com/go-graphite/carbonapi/util/ctx"
 	pb "github.com/go-graphite/protocol/carbonapi_v3_pb"
-
-	"github.com/go-graphite/carbonapi/expr/metadata"
-	"github.com/lomik/zapwriter"
-	"go.uber.org/zap"
 )
 
 type requestInterval struct {
@@ -62,6 +62,11 @@ func initHandlers() *http.ServeMux {
 
 	r.HandleFunc("/functions", functionsHandler)
 	r.HandleFunc("/functions/", functionsHandler)
+
+	features := features.GetFeaturesInstance()
+	r.HandleFunc("/_internal/flags", features.FlagListHandler)
+	r.HandleFunc("/_internal/flags/id", features.FlagPatchByIDHandler)
+	r.HandleFunc("/_internal/flags/name", features.FlagPatchByNameHandler)
 
 	r.HandleFunc("/", usageHandler)
 	return r
