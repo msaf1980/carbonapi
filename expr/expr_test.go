@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"reflect"
 	"testing"
 	"time"
 	"unicode"
 
 	"github.com/go-graphite/carbonapi/expr/functions"
 	"github.com/go-graphite/carbonapi/expr/helper"
+	_ "github.com/go-graphite/carbonapi/expr/interfaces"
+	"github.com/go-graphite/carbonapi/expr/metadata"
 	"github.com/go-graphite/carbonapi/expr/rewrite"
 	"github.com/go-graphite/carbonapi/expr/types"
 	"github.com/go-graphite/carbonapi/pkg/parser"
@@ -499,6 +502,106 @@ func TestEvalCustomFromUntil(t *testing.T) {
 			}
 			if g[0].Name != tt.name {
 				t.Errorf("bad name for %+v: got %v, want %v", g, g[0].Name, tt.name)
+			}
+		})
+	}
+}
+
+func Test_filteringFunctions(t *testing.T) {
+	//set backend filtering for exclude and average function
+	metadata.FunctionMD.RLock()
+	for _, function := range []string{"exclude", "average"} {
+		if f, ok := metadata.FunctionMD.Functions[function]; ok {
+			f.SetBackendFiltered()
+		}
+	}
+	metadata.FunctionMD.RUnlock()
+
+	tests := []struct {
+		target  string
+		want    map[string][][]*pb.FilteringFunction
+		wantErr bool
+	}{
+		{
+			target: "scaleToSeconds(exclude(test.value.*,'RejectedByFilter|SomeRequestsFailed'),60)",
+			want: map[string][][]*pb.FilteringFunction{
+				"test.value.*": {
+					{
+						{
+							Name:      "exclude",
+							Arguments: []string{"RejectedByFilter|SomeRequestsFailed"},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			target: "divideSeries(exclude(test.*.cur,'RejectedByFilter|SomeRequestsFailed'),exclude(test.*.max,'RejectedByFilter|SomeRequestsFailed'))",
+			want: map[string][][]*pb.FilteringFunction{
+				"test.*.cur": {
+					{
+						{
+							Name:      "exclude",
+							Arguments: []string{"RejectedByFilter|SomeRequestsFailed"},
+						},
+					},
+				},
+				"test.*.max": {
+					{
+						{
+							Name:      "exclude",
+							Arguments: []string{"RejectedByFilter|SomeRequestsFailed"},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			target: "sumSeries(exclude(test.*.cur,'RejectedByFilter|SomeRequestsFailed'))",
+			want: map[string][][]*pb.FilteringFunction{
+				"test.*.cur": {
+					{
+						{
+							Name: "sumSeries",
+						},
+						{
+							Name:      "exclude",
+							Arguments: []string{"RejectedByFilter|SomeRequestsFailed"},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.target, func(t *testing.T) {
+			filters := make(map[string][][]*pb.FilteringFunction)
+			exp, _, err := parser.ParseExpr(tt.target)
+			if err != nil {
+				t.Errorf("parser.ParseExpr() error = %v", err)
+				return
+			}
+			err = filteringFunctions(exp, filters, nil)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("filteringFunctions() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			for m, gotFilter := range filters {
+				if wantFilter, ok := tt.want[m]; ok {
+					if !reflect.DeepEqual(wantFilter, gotFilter) {
+						t.Errorf("filteringFunctions()[%s]\n- %v\n+ %v", m, wantFilter, gotFilter)
+					}
+				} else {
+					t.Errorf("filteringFunctions()[%s]\n+ %v", m, gotFilter)
+				}
+			}
+			for m, wantFilter := range tt.want {
+				if _, ok := filters[m]; !ok {
+					t.Errorf("filteringFunctions()[%s]\n- %v", m, wantFilter)
+				}
 			}
 		})
 	}

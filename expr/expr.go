@@ -7,45 +7,148 @@ import (
 
 	"github.com/ansel1/merry"
 	"github.com/go-graphite/carbonapi/cmd/carbonapi/config"
-	_ "github.com/go-graphite/carbonapi/expr/functions"
 	"github.com/go-graphite/carbonapi/expr/helper"
+	_ "github.com/go-graphite/carbonapi/expr/interfaces"
 	"github.com/go-graphite/carbonapi/expr/metadata"
 	"github.com/go-graphite/carbonapi/expr/types"
 	"github.com/go-graphite/carbonapi/pkg/parser"
 	pb "github.com/go-graphite/protocol/carbonapi_v3_pb"
 )
 
+// func MetricWithFilteringFunctions(ff []*pb.FilteringFunction, metric string) string {
+// 	var sb stringutils.Builder
+// 	if
+// }
+
+// func (ff FilteringFunctions) String(metric string) string {
+
+// }
+
 type evaluator struct{}
 
-func filteringFunctions(e parser.Expr, filters []*pb.FilteringFunction) ([]*pb.FilteringFunction, error) {
-	var err error
-	if e.IsFunc() {
+// sumSeries(scaleToSeconds(exclude(test.withError.count.*,'RejectedByFilter|SomeRequestsFailed'),60))
+//
+// exp
+//   target: "sumSeries"
+//   etype: EtFunc
+//   args:
+//     [0]:
+//       target: scaleToSeconds
+//       etype: EtFunc
+//       args:
+//         [0]:
+//           target: exclude
+//           etype: EtFunc
+//           args:
+//             [0]:
+//               target: "test.withError.count.*"
+//               etype: EtName
+//             [1]:
+//               target: ""
+//               etype: EtString
+//               valStr: "RejectedByFilter|SomeRequestsFailed"
+//
+//
+// divideSeries(exclude(test.*.cur,'RejectedByFilter|SomeRequestsFailed'),exclude(test.*.max,'RejectedByFilter|SomeRequestsFailed'))
+
+// exp
+//   target: "divideSeries"
+//   etype: EtFunc
+//   args:
+//     [0]:
+//         target: exclude
+//         etype: EtFunc
+//         args:
+//           [0]:
+//             target: "test.*.cur"
+//             etype: EtName
+//           [1]:
+//             target: ""
+//             etype: EtString
+//             valStr: "RejectedByFilter|SomeRequestsFailed"
+//     [1]:
+//         target: exclude
+//         etype: EtFunc
+//         args:
+//           [0]:
+//             target: "test.*.max"
+//             etype: EtName
+//           [1]:
+//             target: ""
+//             etype: EtString
+//             valStr: "RejectedByFilter|SomeRequestsFailed"
+
+func filteringFunctions(e parser.Expr, filters map[string][][]*pb.FilteringFunction, filterChain []*pb.FilteringFunction) error {
+	// var err error
+	var filtered bool
+	if e.IsName() {
+		// metric, flush filter chain
+		if len(filterChain) > 0 {
+			filters[e.Target()] = append(filters[e.Target()], filterChain)
+		}
+	} else if e.IsFunc() {
 		metadata.FunctionMD.RLock()
 		f, ok := metadata.FunctionMD.Functions[e.Target()]
 		metadata.FunctionMD.RUnlock()
 		if !ok {
-			return nil, merry.WithHTTPCode(helper.ErrUnknownFunction(e.Target()), 400)
+			return merry.WithHTTPCode(helper.ErrUnknownFunction(e.Target()), 400)
 		}
 
 		var filter *pb.FilteringFunction
-		if f.CanBackendFiltered() {
+
+		filtered = f.CanBackendFiltered()
+		fArgs := 0
+		fSubs := 0
+
+		if filtered {
+			for _, arg := range e.Args() {
+				if arg.IsFunc() || arg.IsName() {
+					if fSubs > 1 {
+						// can't filter for function with multiply args with EtFunc/EtName types, need to reset filter chain
+						filtered = false
+						break
+					}
+					fSubs++
+				} else {
+					// function args
+					fArgs++
+				}
+			}
+		}
+
+		if !filtered && len(filterChain) > 0 {
+			// reset filter chains
+			filterChain = nil
+		}
+
+		if filtered {
 			filter = &pb.FilteringFunction{
 				Name: e.Target(),
 			}
+			if fArgs > 0 {
+				filter.Arguments = make([]string, 0, fArgs)
+			}
+
+			for _, arg := range e.Args() {
+				if !arg.IsFunc() && !arg.IsName() {
+					filter.Arguments = append(filter.Arguments, arg.StringValue())
+				}
+			}
+
+			filterChain = append(filterChain, filter)
 		}
+
 		for _, arg := range e.Args() {
-			if arg.IsString() {
-				filter.Arguments = append(filter.Arguments, arg.StringValue())
-			} else if filters, err = filteringFunctions(arg, filters); err != nil {
-				return nil, err
+			if arg.IsFunc() || arg.IsName() {
+				if err := filteringFunctions(arg, filters, filterChain); err != nil {
+					return err
+				}
 			}
 		}
-		if f.CanBackendFiltered() {
-			filters = append(filters, filter)
-		}
+
 	}
 
-	return filters, nil
+	return nil
 }
 
 // FetchAndEvalExp fetch data and evalualtes expressions
@@ -59,21 +162,20 @@ func (eval evaluator) FetchAndEvalExp(ctx context.Context, exp parser.Expr, from
 	// values related to this particular `target=`
 	targetValues := make(map[parser.MetricRequest][]*types.MetricData)
 
-	var filters []*pb.FilteringFunction
-	var err error
-	filters, err = filteringFunctions(exp, filters)
-	if err != nil {
-		return nil, err
-	}
+	//filters := make([]*pb.FilteringFunction, 0, 4)
+	// var err error
+	// filters, err = filteringFunctions(exp, filters)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	for _, m := range exp.Metrics() {
 		fetchRequest := pb.FetchRequest{
-			Name:            m.Metric,
-			PathExpression:  m.Metric,
-			StartTime:       m.From + from,
-			StopTime:        m.Until + until,
-			MaxDataPoints:   maxDataPoints,
-			FilterFunctions: filters,
+			Name:           m.Metric,
+			PathExpression: m.Metric,
+			StartTime:      m.From + from,
+			StopTime:       m.Until + until,
+			MaxDataPoints:  maxDataPoints,
 		}
 		metricRequest := parser.MetricRequest{
 			Metric: fetchRequest.PathExpression,

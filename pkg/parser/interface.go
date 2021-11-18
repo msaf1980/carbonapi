@@ -13,6 +13,12 @@ type MetricRequest struct {
 	Until  int64
 }
 
+// MetricRequestCached contains all necessary data to be a cached metric key.
+type MetricRequestCached struct {
+	MetricRequest
+	Filter string
+}
+
 // ExprType defines a type for expression types constants (e.x. functions, values, constants, parameters, strings)
 type ExprType int
 

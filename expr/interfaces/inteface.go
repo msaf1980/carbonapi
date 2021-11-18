@@ -10,7 +10,7 @@ import (
 // FunctionBase is a set of base methods that partly satisfy Function interface and most probably nobody will modify
 type FunctionBase struct {
 	Evaluator          Evaluator
-	canBackendFiltered bool
+	canBackendFiltered bool // TODO: read from config
 }
 
 // SetEvaluator sets evaluator
@@ -27,7 +27,7 @@ func (b *FunctionBase) CanBackendFiltered() bool {
 	return b.canBackendFiltered
 }
 
-func (b *FunctionBase) SetPass() {
+func (b *FunctionBase) SetBackendFiltered() {
 	b.canBackendFiltered = true
 }
 
@@ -63,6 +63,7 @@ type Function interface {
 	GetEvaluator() Evaluator
 	Do(ctx context.Context, e parser.Expr, from, until int64, values map[parser.MetricRequest][]*types.MetricData) ([]*types.MetricData, error)
 	Description() map[string]types.FunctionDescription
+	SetBackendFiltered()
 	CanBackendFiltered() bool
 }
 
