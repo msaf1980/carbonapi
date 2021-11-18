@@ -10,12 +10,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/ansel1/merry"
-	"github.com/go-graphite/carbonapi/expr/interfaces"
 	"github.com/go-graphite/carbonapi/expr/types"
 	"github.com/go-graphite/carbonapi/pkg/parser"
 )
 
-var evaluator interfaces.Evaluator
+var evaluator parser.Evaluator
 
 // Backref is a pre-compiled expression for backref
 var Backref = regexp.MustCompile(`\\(\d+)`)
@@ -28,7 +27,7 @@ func (e ErrUnknownFunction) Error() string {
 }
 
 // SetEvaluator sets evaluator for all helper functions
-func SetEvaluator(e interfaces.Evaluator) {
+func SetEvaluator(e parser.Evaluator) {
 	evaluator = e
 }
 

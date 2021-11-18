@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/go-graphite/carbonapi/expr/interfaces"
-	"github.com/go-graphite/carbonapi/expr/metadata"
 	"github.com/go-graphite/carbonapi/expr/types"
 	"github.com/go-graphite/carbonapi/limiter"
 	"github.com/go-graphite/carbonapi/pkg/parser"
@@ -240,7 +239,7 @@ smartSummarise will be performed by graphite-web and then results will be passed
 	}
 
 	functions := []string{"graphiteWeb"}
-	metadata.FunctionMD.RLock()
+	parser.FunctionMD.RLock()
 	for k, v := range graphiteWebSupportedFunctions {
 		var ok bool
 		if _, ok = forceSkip[k]; ok {
@@ -254,7 +253,7 @@ smartSummarise will be performed by graphite-web and then results will be passed
 			continue
 		}
 
-		if v2, ok := metadata.FunctionMD.Descriptions[k]; ok {
+		if v2, ok := parser.FunctionMD.Descriptions[k]; ok {
 			if f.strict {
 				ok = paramsIsEqual(v.Params, v2.Params)
 			}
@@ -267,7 +266,7 @@ smartSummarise will be performed by graphite-web and then results will be passed
 		v.Proxied = true
 		f.supportedFunctions[k] = v
 	}
-	metadata.FunctionMD.RUnlock()
+	parser.FunctionMD.RUnlock()
 
 	f.working = true
 
@@ -455,7 +454,7 @@ func (f *graphiteWeb) Do(ctx context.Context, e parser.Expr, from, until int64, 
 		}
 		res = append(res, &types.MetricData{
 			FetchResponse: pbResp,
-			Tags: tags,
+			Tags:          tags,
 		})
 	}
 

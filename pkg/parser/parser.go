@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/ansel1/merry"
+
+	pb "github.com/go-graphite/protocol/carbonapi_v3_pb"
 )
 
 // expression parser
@@ -124,28 +126,107 @@ func (e *expr) NamedArgs() map[string]Expr {
 	return ret
 }
 
-func (e *expr) Metrics() []MetricRequest {
+func (e *expr) Metrics() ([]MetricRequestWithFilter, error) {
+	return e.metrics(nil)
+}
+
+func copyReverse(filter []*pb.FilteringFunction) []*pb.FilteringFunction {
+	newFilter := make([]*pb.FilteringFunction, len(filter))
+	copy(newFilter, filter)
+	last := len(filter) - 1
+	for i := 0; i < len(filter)/2; i++ {
+		newFilter[i], newFilter[last-i] = newFilter[last-i], newFilter[i]
+	}
+
+	return newFilter
+}
+
+func (e *expr) metrics(filterChain []*pb.FilteringFunction) ([]MetricRequestWithFilter, error) {
 	switch e.etype {
 	case EtName:
-		return []MetricRequest{{Metric: e.target}}
+		metrics := []MetricRequestWithFilter{{Metric: e.target}}
+		if len(filterChain) > 0 {
+			metrics[0].Filter = copyReverse(filterChain)
+		}
+		return metrics, nil
 	case EtConst, EtString:
-		return nil
+		return nil, nil
 	case EtFunc:
-		var r []MetricRequest
+		FunctionMD.RLock()
+		f, ok := FunctionMD.Functions[e.Target()]
+		FunctionMD.RUnlock()
+		if !ok {
+			return nil, merry.WithHTTPCode(fmt.Errorf("unknown function in evalExpr: %s", e.Target()), 400)
+		}
+
+		var filter *pb.FilteringFunction
+
+		filtered := f.CanBackendFiltered()
+		fArgs := 0
+		fSubs := 0
+
+		if filtered {
+			for _, arg := range e.Args() {
+				if arg.IsFunc() || arg.IsName() {
+					if fSubs > 1 {
+						// can't filter for function with multiply args with EtFunc/EtName types, need to reset filter chain
+						filtered = false
+						break
+					}
+					fSubs++
+				} else {
+					// function args
+					fArgs++
+				}
+			}
+		}
+
+		if !filtered && len(filterChain) > 0 {
+			// reset filter chains
+			filterChain = nil
+		}
+
+		if filtered {
+			filter = &pb.FilteringFunction{
+				Name: e.Target(),
+			}
+			if fArgs > 0 {
+				filter.Arguments = make([]string, 0, fArgs)
+			}
+
+			for _, arg := range e.Args() {
+				if !arg.IsFunc() && !arg.IsName() {
+					filter.Arguments = append(filter.Arguments, arg.StringValue())
+				}
+			}
+
+			filterChain = append(filterChain, filter)
+		}
+
+		var r []MetricRequestWithFilter
+
 		for _, a := range e.args {
-			r = append(r, a.Metrics()...)
+			if metrics, err := a.metrics(filterChain); err == nil {
+				r = append(r, metrics...)
+			} else {
+				return nil, err
+			}
 		}
 
 		switch e.target {
 		case "transformNull":
 			referenceSeriesExpr := e.GetNamedArg("referenceSeries")
-			if !referenceSeriesExpr.IsInterfaceNil() {
-				r = append(r, referenceSeriesExpr.Metrics()...)
+			if metrics, err := referenceSeriesExpr.Metrics(); err == nil {
+				if !referenceSeriesExpr.IsInterfaceNil() {
+					r = append(r, metrics...)
+				}
+			} else {
+				return nil, merry.WithHTTPCode(err, 400)
 			}
 		case "timeShift":
 			offs, err := e.GetIntervalArg(1, -1)
 			if err != nil {
-				return nil
+				return nil, merry.WithHTTPCode(err, 400)
 			}
 			for i := range r {
 				r[i].From += int64(offs)
@@ -154,25 +235,25 @@ func (e *expr) Metrics() []MetricRequest {
 		case "timeStack":
 			offs, err := e.GetIntervalArg(1, -1)
 			if err != nil {
-				return nil
+				return nil, merry.WithHTTPCode(err, 400)
 			}
 
 			start, err := e.GetIntArg(2)
 			if err != nil {
-				return nil
+				return nil, merry.WithHTTPCode(err, 400)
 			}
 
 			end, err := e.GetIntArg(3)
 			if err != nil {
-				return nil
+				return nil, merry.WithHTTPCode(err, 400)
 			}
 
-			var r2 []MetricRequest
+			var r2 []MetricRequestWithFilter
 			for _, v := range r {
 				for i := int64(start); i < int64(end); i++ {
 					fromNew := v.From + i*int64(offs)
 					untilNew := v.Until + i*int64(offs)
-					r2 = append(r2, MetricRequest{
+					r2 = append(r2, MetricRequestWithFilter{
 						Metric: v.Metric,
 						From:   fromNew,
 						Until:  untilNew,
@@ -180,19 +261,19 @@ func (e *expr) Metrics() []MetricRequest {
 				}
 			}
 
-			return r2
+			return r2, nil
 		case "holtWintersForecast", "holtWintersConfidenceBands", "holtWintersAberration":
 			for i := range r {
 				r[i].From -= 7 * 86400 // starts -7 days from where the original starts
 			}
 		case "movingAverage", "movingMedian", "movingMin", "movingMax", "movingSum":
 			if len(e.args) < 2 {
-				return nil
+				return nil, merry.WithHTTPCode(fmt.Errorf("incorrect argument count for function: %s", e.Target()), 400)
 			}
 			if e.args[1].etype == EtString {
 				offs, err := e.GetIntervalArg(1, 1)
 				if err != nil {
-					return nil
+					return nil, merry.WithHTTPCode(err, 400)
 				}
 				for i := range r {
 					fromNew := r[i].From - int64(offs)
@@ -200,10 +281,10 @@ func (e *expr) Metrics() []MetricRequest {
 				}
 			}
 		}
-		return r
+		return r, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 func (e *expr) GetIntervalArg(n, defaultSign int) (int32, error) {

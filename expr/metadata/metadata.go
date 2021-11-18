@@ -1,21 +1,19 @@
 package metadata
 
 import (
-	"sync"
-
-	"github.com/go-graphite/carbonapi/expr/interfaces"
 	"github.com/go-graphite/carbonapi/expr/types"
+	"github.com/go-graphite/carbonapi/pkg/parser"
 	"github.com/lomik/zapwriter"
 	"go.uber.org/zap"
 )
 
 // RegisterRewriteFunctionWithFilename registers function for a rewrite phase in metadata and fills out all Description structs
-func RegisterRewriteFunctionWithFilename(name, filename string, function interfaces.RewriteFunction) {
-	FunctionMD.Lock()
-	defer FunctionMD.Unlock()
-	function.SetEvaluator(FunctionMD.evaluator)
-	if _, ok := FunctionMD.RewriteFunctions[name]; ok {
-		n := FunctionMD.RewriteFunctionsFilenames[name]
+func RegisterRewriteFunctionWithFilename(name, filename string, function parser.RewriteFunction) {
+	parser.FunctionMD.Lock()
+	defer parser.FunctionMD.Unlock()
+	function.SetEvaluator(parser.FunctionMD.Evaluator)
+	if _, ok := parser.FunctionMD.RewriteFunctions[name]; ok {
+		n := parser.FunctionMD.RewriteFunctionsFilenames[name]
 		logger := zapwriter.Logger("registerRewriteFunction")
 		logger.Warn("function already registered, will register new anyway",
 			zap.String("name", name),
@@ -24,11 +22,11 @@ func RegisterRewriteFunctionWithFilename(name, filename string, function interfa
 			zap.Stack("stack"),
 		)
 	} else {
-		FunctionMD.RewriteFunctionsFilenames[name] = make([]string, 0)
+		parser.FunctionMD.RewriteFunctionsFilenames[name] = make([]string, 0)
 	}
 	// Check if we are colliding with non-rewrite Functions
-	if _, ok := FunctionMD.Functions[name]; ok {
-		n := FunctionMD.FunctionsFilenames[name]
+	if _, ok := parser.FunctionMD.Functions[name]; ok {
+		n := parser.FunctionMD.FunctionsFilenames[name]
 		logger := zapwriter.Logger("registerRewriteFunction")
 		logger.Warn("non-rewrite function with the same name already registered",
 			zap.String("name", name),
@@ -37,31 +35,31 @@ func RegisterRewriteFunctionWithFilename(name, filename string, function interfa
 			zap.Stack("stack"),
 		)
 	}
-	FunctionMD.RewriteFunctionsFilenames[name] = append(FunctionMD.RewriteFunctionsFilenames[name], filename)
-	FunctionMD.RewriteFunctions[name] = function
+	parser.FunctionMD.RewriteFunctionsFilenames[name] = append(parser.FunctionMD.RewriteFunctionsFilenames[name], filename)
+	parser.FunctionMD.RewriteFunctions[name] = function
 
 	for k, v := range function.Description() {
-		FunctionMD.Descriptions[k] = v
-		if _, ok := FunctionMD.DescriptionsGrouped[v.Group]; !ok {
-			FunctionMD.DescriptionsGrouped[v.Group] = make(map[string]types.FunctionDescription)
+		parser.FunctionMD.Descriptions[k] = v
+		if _, ok := parser.FunctionMD.DescriptionsGrouped[v.Group]; !ok {
+			parser.FunctionMD.DescriptionsGrouped[v.Group] = make(map[string]types.FunctionDescription)
 		}
-		FunctionMD.DescriptionsGrouped[v.Group][k] = v
+		parser.FunctionMD.DescriptionsGrouped[v.Group][k] = v
 	}
 }
 
 // RegisterRewriteFunction registers function for a rewrite phase in metadata and fills out all Description structs
-func RegisterRewriteFunction(name string, function interfaces.RewriteFunction) {
+func RegisterRewriteFunction(name string, function parser.RewriteFunction) {
 	RegisterRewriteFunctionWithFilename(name, "", function)
 }
 
 // RegisterFunctionWithFilename registers function in metadata and fills out all Description structs
-func RegisterFunctionWithFilename(name, filename string, function interfaces.Function) {
-	FunctionMD.Lock()
-	defer FunctionMD.Unlock()
-	function.SetEvaluator(FunctionMD.evaluator)
+func RegisterFunctionWithFilename(name, filename string, function parser.Function) {
+	parser.FunctionMD.Lock()
+	defer parser.FunctionMD.Unlock()
+	function.SetEvaluator(parser.FunctionMD.Evaluator)
 
-	if _, ok := FunctionMD.Functions[name]; ok {
-		n := FunctionMD.FunctionsFilenames[name]
+	if _, ok := parser.FunctionMD.Functions[name]; ok {
+		n := parser.FunctionMD.FunctionsFilenames[name]
 		logger := zapwriter.Logger("registerFunction")
 		logger.Warn("function already registered, will register new anyway",
 			zap.String("name", name),
@@ -70,11 +68,11 @@ func RegisterFunctionWithFilename(name, filename string, function interfaces.Fun
 			zap.Stack("stack"),
 		)
 	} else {
-		FunctionMD.FunctionsFilenames[name] = make([]string, 0)
+		parser.FunctionMD.FunctionsFilenames[name] = make([]string, 0)
 	}
 	// Check if we are colliding with non-rewrite Functions
-	if _, ok := FunctionMD.RewriteFunctions[name]; ok {
-		n := FunctionMD.RewriteFunctionsFilenames[name]
+	if _, ok := parser.FunctionMD.RewriteFunctions[name]; ok {
+		n := parser.FunctionMD.RewriteFunctionsFilenames[name]
 		logger := zapwriter.Logger("registerRewriteFunction")
 		logger.Warn("rewrite function with the same name already registered",
 			zap.String("name", name),
@@ -83,68 +81,42 @@ func RegisterFunctionWithFilename(name, filename string, function interfaces.Fun
 			zap.Stack("stack"),
 		)
 	}
-	FunctionMD.Functions[name] = function
-	FunctionMD.FunctionsFilenames[name] = append(FunctionMD.FunctionsFilenames[name], filename)
+	parser.FunctionMD.Functions[name] = function
+	parser.FunctionMD.FunctionsFilenames[name] = append(parser.FunctionMD.FunctionsFilenames[name], filename)
 
 	for k, v := range function.Description() {
-		FunctionMD.Descriptions[k] = v
-		if _, ok := FunctionMD.DescriptionsGrouped[v.Group]; !ok {
-			FunctionMD.DescriptionsGrouped[v.Group] = make(map[string]types.FunctionDescription)
+		parser.FunctionMD.Descriptions[k] = v
+		if _, ok := parser.FunctionMD.DescriptionsGrouped[v.Group]; !ok {
+			parser.FunctionMD.DescriptionsGrouped[v.Group] = make(map[string]types.FunctionDescription)
 		}
-		FunctionMD.DescriptionsGrouped[v.Group][k] = v
+		parser.FunctionMD.DescriptionsGrouped[v.Group][k] = v
 	}
 }
 
 // RegisterFunction registers function in metadata and fills out all Description structs
-func RegisterFunction(name string, function interfaces.Function) {
+func RegisterFunction(name string, function parser.Function) {
 	RegisterFunctionWithFilename(name, "", function)
 }
 
 // SetEvaluator sets new evaluator function to be default for everything that needs it
-func SetEvaluator(evaluator interfaces.Evaluator) {
-	FunctionMD.Lock()
-	defer FunctionMD.Unlock()
+func SetEvaluator(evaluator parser.Evaluator) {
+	parser.FunctionMD.Lock()
+	defer parser.FunctionMD.Unlock()
 
-	FunctionMD.evaluator = evaluator
-	for _, v := range FunctionMD.Functions {
+	parser.FunctionMD.Evaluator = evaluator
+	for _, v := range parser.FunctionMD.Functions {
 		v.SetEvaluator(evaluator)
 	}
 
-	for _, v := range FunctionMD.RewriteFunctions {
+	for _, v := range parser.FunctionMD.RewriteFunctions {
 		v.SetEvaluator(evaluator)
 	}
 }
 
 // GetEvaluator returns evaluator
-func GetEvaluator() interfaces.Evaluator {
-	FunctionMD.RLock()
-	defer FunctionMD.RUnlock()
+func GetEvaluator() parser.Evaluator {
+	parser.FunctionMD.RLock()
+	defer parser.FunctionMD.RUnlock()
 
-	return FunctionMD.evaluator
-}
-
-// Metadata is a type to store global function metadata
-type Metadata struct {
-	sync.RWMutex
-
-	Functions                 map[string]interfaces.Function
-	RewriteFunctions          map[string]interfaces.RewriteFunction
-	Descriptions              map[string]types.FunctionDescription
-	DescriptionsGrouped       map[string]map[string]types.FunctionDescription
-	FunctionConfigFiles       map[string]string
-	FunctionsFilenames        map[string][]string
-	RewriteFunctionsFilenames map[string][]string
-
-	evaluator interfaces.Evaluator
-}
-
-// FunctionMD is actual global variable that stores metadata
-var FunctionMD = Metadata{
-	RewriteFunctions:          make(map[string]interfaces.RewriteFunction),
-	Functions:                 make(map[string]interfaces.Function),
-	Descriptions:              make(map[string]types.FunctionDescription),
-	DescriptionsGrouped:       make(map[string]map[string]types.FunctionDescription),
-	FunctionConfigFiles:       make(map[string]string),
-	FunctionsFilenames:        make(map[string][]string),
-	RewriteFunctionsFilenames: make(map[string][]string),
+	return parser.FunctionMD.Evaluator
 }

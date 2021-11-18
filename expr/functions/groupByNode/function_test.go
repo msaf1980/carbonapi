@@ -22,7 +22,7 @@ func init() {
 		metadata.RegisterFunction(m.Name, m.F)
 	}
 
-	evaluator := th.EvaluatorFromFuncWithMetadata(metadata.FunctionMD.Functions)
+	evaluator := th.EvaluatorFromFuncWithMetadata(parser.FunctionMD.Functions)
 	metadata.SetEvaluator(evaluator)
 	helper.SetEvaluator(evaluator)
 }

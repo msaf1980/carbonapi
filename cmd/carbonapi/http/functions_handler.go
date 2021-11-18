@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/go-graphite/carbonapi/carbonapipb"
-	"github.com/go-graphite/carbonapi/expr/metadata"
 	"github.com/go-graphite/carbonapi/expr/types"
+	"github.com/go-graphite/carbonapi/pkg/parser"
 	utilctx "github.com/go-graphite/carbonapi/util/ctx"
 	"github.com/lomik/zapwriter"
 	"go.uber.org/zap"
@@ -82,26 +82,26 @@ func functionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	var b []byte
 	if !nativeOnly {
-		metadata.FunctionMD.RLock()
+		parser.FunctionMD.RLock()
 		if function != "" {
-			b, err = marshaler(metadata.FunctionMD.Descriptions[function])
+			b, err = marshaler(parser.FunctionMD.Descriptions[function])
 		} else if grouped {
-			b, err = marshaler(metadata.FunctionMD.DescriptionsGrouped)
+			b, err = marshaler(parser.FunctionMD.DescriptionsGrouped)
 		} else {
-			b, err = marshaler(metadata.FunctionMD.Descriptions)
+			b, err = marshaler(parser.FunctionMD.Descriptions)
 		}
-		metadata.FunctionMD.RUnlock()
+		parser.FunctionMD.RUnlock()
 	} else {
-		metadata.FunctionMD.RLock()
+		parser.FunctionMD.RLock()
 		if function != "" {
-			if !metadata.FunctionMD.Descriptions[function].Proxied {
-				b, err = marshaler(metadata.FunctionMD.Descriptions[function])
+			if !parser.FunctionMD.Descriptions[function].Proxied {
+				b, err = marshaler(parser.FunctionMD.Descriptions[function])
 			} else {
 				err = fmt.Errorf("%v is proxied to graphite-web and nativeOnly was specified", function)
 			}
 		} else if grouped {
 			descGrouped := make(map[string]map[string]types.FunctionDescription)
-			for groupName, description := range metadata.FunctionMD.DescriptionsGrouped {
+			for groupName, description := range parser.FunctionMD.DescriptionsGrouped {
 				desc := make(map[string]types.FunctionDescription)
 				for f, d := range description {
 					if d.Proxied {
@@ -116,7 +116,7 @@ func functionsHandler(w http.ResponseWriter, r *http.Request) {
 			b, err = marshaler(descGrouped)
 		} else {
 			desc := make(map[string]types.FunctionDescription)
-			for f, d := range metadata.FunctionMD.Descriptions {
+			for f, d := range parser.FunctionMD.Descriptions {
 				if d.Proxied {
 					continue
 				}
@@ -124,7 +124,7 @@ func functionsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			b, err = marshaler(desc)
 		}
-		metadata.FunctionMD.RUnlock()
+		parser.FunctionMD.RUnlock()
 	}
 
 	if err != nil {

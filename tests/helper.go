@@ -10,7 +10,6 @@ import (
 
 	"github.com/ansel1/merry"
 	"github.com/go-graphite/carbonapi/expr/helper"
-	"github.com/go-graphite/carbonapi/expr/interfaces"
 	"github.com/go-graphite/carbonapi/expr/metadata"
 	"github.com/go-graphite/carbonapi/expr/types"
 	"github.com/go-graphite/carbonapi/pkg/parser"
@@ -48,7 +47,7 @@ func (evaluator *FuncEvaluator) Eval(ctx context.Context, e parser.Expr, from, u
 	return nil, helper.ErrUnknownFunction(e.Target())
 }
 
-func DummyEvaluator() interfaces.Evaluator {
+func DummyEvaluator() parser.Evaluator {
 	e := &FuncEvaluator{
 		eval: nil,
 	}
@@ -56,7 +55,7 @@ func DummyEvaluator() interfaces.Evaluator {
 	return e
 }
 
-func EvaluatorFromFunc(function interfaces.Function) interfaces.Evaluator {
+func EvaluatorFromFunc(function parser.Function) parser.Evaluator {
 	e := &FuncEvaluator{
 		eval: function.Do,
 	}
@@ -64,7 +63,7 @@ func EvaluatorFromFunc(function interfaces.Function) interfaces.Evaluator {
 	return e
 }
 
-func EvaluatorFromFuncWithMetadata(metadata map[string]interfaces.Function) interfaces.Evaluator {
+func EvaluatorFromFuncWithMetadata(metadata map[string]parser.Function) parser.Evaluator {
 	e := &FuncEvaluator{
 		eval: func(ctx context.Context, e parser.Expr, from, until int64, values map[parser.MetricRequest][]*types.MetricData) ([]*types.MetricData, error) {
 			if f, ok := metadata[e.Target()]; ok {
@@ -427,9 +426,9 @@ type RewriteTestItem struct {
 
 func rewriteExpr(e parser.Expr, from, until int64, values map[parser.MetricRequest][]*types.MetricData) (bool, []string, error) {
 	if e.IsFunc() {
-		metadata.FunctionMD.RLock()
-		f, ok := metadata.FunctionMD.RewriteFunctions[e.Target()]
-		metadata.FunctionMD.RUnlock()
+		parser.FunctionMD.RLock()
+		f, ok := parser.FunctionMD.RewriteFunctions[e.Target()]
+		parser.FunctionMD.RUnlock()
 		if ok {
 			return f.Do(context.Background(), e, from, until, values)
 		}

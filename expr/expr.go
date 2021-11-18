@@ -87,9 +87,9 @@ func filteringFunctions(e parser.Expr, filters map[string][][]*pb.FilteringFunct
 			filters[e.Target()] = append(filters[e.Target()], filterChain)
 		}
 	} else if e.IsFunc() {
-		metadata.FunctionMD.RLock()
-		f, ok := metadata.FunctionMD.Functions[e.Target()]
-		metadata.FunctionMD.RUnlock()
+		parser.FunctionMD.RLock()
+		f, ok := parser.FunctionMD.Functions[e.Target()]
+		parser.FunctionMD.RUnlock()
 		if !ok {
 			return merry.WithHTTPCode(helper.ErrUnknownFunction(e.Target()), 400)
 		}
@@ -169,7 +169,12 @@ func (eval evaluator) FetchAndEvalExp(ctx context.Context, exp parser.Expr, from
 	// 	return nil, err
 	// }
 
-	for _, m := range exp.Metrics() {
+	metrics, err := exp.Metrics()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, m := range metrics {
 		fetchRequest := pb.FetchRequest{
 			Name:           m.Metric,
 			PathExpression: m.Metric,
@@ -294,9 +299,9 @@ func EvalExpr(ctx context.Context, e parser.Expr, from, until int64, values map[
 		return nil, merry.WithHTTPCode(err, 400)
 	}
 
-	metadata.FunctionMD.RLock()
-	f, ok := metadata.FunctionMD.Functions[e.Target()]
-	metadata.FunctionMD.RUnlock()
+	parser.FunctionMD.RLock()
+	f, ok := parser.FunctionMD.Functions[e.Target()]
+	parser.FunctionMD.RUnlock()
 	if ok {
 		v, err := f.Do(ctx, e, from, until, values)
 		if err != nil {
@@ -329,9 +334,9 @@ func EvalExpr(ctx context.Context, e parser.Expr, from, until int64, values map[
 // Assumes that applyByNode only appears as the outermost function.
 func RewriteExpr(ctx context.Context, e parser.Expr, from, until int64, values map[parser.MetricRequest][]*types.MetricData) (bool, []string, error) {
 	if e.IsFunc() {
-		metadata.FunctionMD.RLock()
-		f, ok := metadata.FunctionMD.RewriteFunctions[e.Target()]
-		metadata.FunctionMD.RUnlock()
+		parser.FunctionMD.RLock()
+		f, ok := parser.FunctionMD.RewriteFunctions[e.Target()]
+		parser.FunctionMD.RUnlock()
 		if ok {
 			return f.Do(ctx, e, from, until, values)
 		}

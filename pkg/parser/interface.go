@@ -1,9 +1,14 @@
 package parser
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+
+	"github.com/go-graphite/carbonapi/expr/types"
+	pb "github.com/go-graphite/protocol/carbonapi_v3_pb"
 )
 
 // MetricRequest contains all necessary data to request a metric.
@@ -13,10 +18,17 @@ type MetricRequest struct {
 	Until  int64
 }
 
-// MetricRequestCached contains all necessary data to be a cached metric key.
-type MetricRequestCached struct {
-	MetricRequest
-	Filter string
+type FilteringFunction struct {
+	Name      string
+	Arguments []string
+}
+
+// MetricRequestWithFilter contains all necessary data to be a metric request.
+type MetricRequestWithFilter struct {
+	Metric string
+	From   int64
+	Until  int64
+	Filter []*pb.FilteringFunction
 }
 
 // ExprType defines a type for expression types constants (e.x. functions, values, constants, parameters, strings)
@@ -108,7 +120,7 @@ type Expr interface {
 	MutateRawArgs(args string) Expr
 
 	// Metrics returns list of metric requests
-	Metrics() []MetricRequest
+	Metrics() ([]MetricRequestWithFilter, error)
 
 	// GetIntervalArg returns interval typed argument.
 	GetIntervalArg(n int, defaultSign int) (int32, error)
@@ -269,4 +281,53 @@ func NewExprTyped(target string, args []Expr) Expr {
 	}
 
 	return e
+}
+
+// Evaluator is a interface for any existing expression parser
+type Evaluator interface {
+	Eval(ctx context.Context, e Expr, from, until int64, values map[MetricRequest][]*types.MetricData) ([]*types.MetricData, error)
+}
+
+// Function is interface that all graphite functions should follow
+type Function interface {
+	SetEvaluator(evaluator Evaluator)
+	GetEvaluator() Evaluator
+	Do(ctx context.Context, e Expr, from, until int64, values map[MetricRequest][]*types.MetricData) ([]*types.MetricData, error)
+	Description() map[string]types.FunctionDescription
+	SetBackendFiltered()
+	CanBackendFiltered() bool
+}
+
+// Function is interface that all graphite functions should follow
+type RewriteFunction interface {
+	SetEvaluator(evaluator Evaluator)
+	GetEvaluator() Evaluator
+	Do(ctx context.Context, e Expr, from, until int64, values map[MetricRequest][]*types.MetricData) (bool, []string, error)
+	Description() map[string]types.FunctionDescription
+}
+
+// Metadata is a type to store global function metadata
+type Metadata struct {
+	sync.RWMutex
+
+	Functions                 map[string]Function
+	RewriteFunctions          map[string]RewriteFunction
+	Descriptions              map[string]types.FunctionDescription
+	DescriptionsGrouped       map[string]map[string]types.FunctionDescription
+	FunctionConfigFiles       map[string]string
+	FunctionsFilenames        map[string][]string
+	RewriteFunctionsFilenames map[string][]string
+
+	Evaluator Evaluator
+}
+
+// FunctionMD is actual global variable that stores metadata
+var FunctionMD = Metadata{
+	RewriteFunctions:          make(map[string]RewriteFunction),
+	Functions:                 make(map[string]Function),
+	Descriptions:              make(map[string]types.FunctionDescription),
+	DescriptionsGrouped:       make(map[string]map[string]types.FunctionDescription),
+	FunctionConfigFiles:       make(map[string]string),
+	FunctionsFilenames:        make(map[string][]string),
+	RewriteFunctionsFilenames: make(map[string][]string),
 }

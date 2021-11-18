@@ -34,7 +34,7 @@ Contains all metadata as a static global variables.
 
 Contains `EvalExpr` - main expression parser, plus `RewriteExpr` - rewrite phase of expression parsing.
 
-`EvalExpr` always uses `metadata.FunctionMD` to get list of known functions.
+`EvalExpr` always uses `parser.FunctionMD` to get list of known functions.
 
 Functions registered by importing `expr/functions/glue.go`
 
