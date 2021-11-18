@@ -141,6 +141,58 @@ func copyReverse(filter []*pb.FilteringFunction) []*pb.FilteringFunction {
 	return newFilter
 }
 
+// sumSeries(scaleToSeconds(exclude(test.withError.count.*,'RejectedByFilter|SomeRequestsFailed'),60))
+//
+// exp
+//   target: "sumSeries"
+//   etype: EtFunc
+//   args:
+//     [0]:
+//       target: scaleToSeconds
+//       etype: EtFunc
+//       args:
+//         [0]:
+//           target: exclude
+//           etype: EtFunc
+//           args:
+//             [0]:
+//               target: "test.withError.count.*"
+//               etype: EtName
+//             [1]:
+//               target: ""
+//               etype: EtString
+//               valStr: "RejectedByFilter|SomeRequestsFailed"
+//
+//
+// divideSeries(exclude(test.*.cur,'RejectedByFilter|SomeRequestsFailed'),exclude(test.*.max,'RejectedByFilter|SomeRequestsFailed'))
+
+// exp
+//   target: "divideSeries"
+//   etype: EtFunc
+//   args:
+//     [0]:
+//         target: exclude
+//         etype: EtFunc
+//         args:
+//           [0]:
+//             target: "test.*.cur"
+//             etype: EtName
+//           [1]:
+//             target: ""
+//             etype: EtString
+//             valStr: "RejectedByFilter|SomeRequestsFailed"
+//     [1]:
+//         target: exclude
+//         etype: EtFunc
+//         args:
+//           [0]:
+//             target: "test.*.max"
+//             etype: EtName
+//           [1]:
+//             target: ""
+//             etype: EtString
+//             valStr: "RejectedByFilter|SomeRequestsFailed"
+
 func (e *expr) metrics(filterChain []*pb.FilteringFunction) ([]MetricRequestWithFilter, error) {
 	switch e.etype {
 	case EtName:

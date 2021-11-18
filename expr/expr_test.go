@@ -506,106 +506,6 @@ func TestEvalCustomFromUntil(t *testing.T) {
 	}
 }
 
-// func Test_filteringFunctions(t *testing.T) {
-// 	//set backend filtering for exclude and average function
-// 	parser.FunctionMD.RLock()
-// 	for _, function := range []string{"exclude", "average"} {
-// 		if f, ok := parser.FunctionMD.Functions[function]; ok {
-// 			f.SetBackendFiltered()
-// 		}
-// 	}
-// 	parser.FunctionMD.RUnlock()
-
-// 	tests := []struct {
-// 		target  string
-// 		want    map[string][][]*pb.FilteringFunction
-// 		wantErr bool
-// 	}{
-// 		{
-// 			target: "scaleToSeconds(exclude(test.value.*,'RejectedByFilter|SomeRequestsFailed'),60)",
-// 			want: map[string][][]*pb.FilteringFunction{
-// 				"test.value.*": {
-// 					{
-// 						{
-// 							Name:      "exclude",
-// 							Arguments: []string{"RejectedByFilter|SomeRequestsFailed"},
-// 						},
-// 					},
-// 				},
-// 			},
-// 			wantErr: false,
-// 		},
-// 		{
-// 			target: "divideSeries(exclude(test.*.cur,'RejectedByFilter|SomeRequestsFailed'),exclude(test.*.max,'RejectedByFilter|SomeRequestsFailed'))",
-// 			want: map[string][][]*pb.FilteringFunction{
-// 				"test.*.cur": {
-// 					{
-// 						{
-// 							Name:      "exclude",
-// 							Arguments: []string{"RejectedByFilter|SomeRequestsFailed"},
-// 						},
-// 					},
-// 				},
-// 				"test.*.max": {
-// 					{
-// 						{
-// 							Name:      "exclude",
-// 							Arguments: []string{"RejectedByFilter|SomeRequestsFailed"},
-// 						},
-// 					},
-// 				},
-// 			},
-// 			wantErr: false,
-// 		},
-// 		{
-// 			target: "sumSeries(exclude(test.*.cur,'RejectedByFilter|SomeRequestsFailed'))",
-// 			want: map[string][][]*pb.FilteringFunction{
-// 				"test.*.cur": {
-// 					{
-// 						{
-// 							Name: "sumSeries",
-// 						},
-// 						{
-// 							Name:      "exclude",
-// 							Arguments: []string{"RejectedByFilter|SomeRequestsFailed"},
-// 						},
-// 					},
-// 				},
-// 			},
-// 			wantErr: false,
-// 		},
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.target, func(t *testing.T) {
-// 			filters := make(map[string][][]*pb.FilteringFunction)
-// 			exp, _, err := parser.ParseExpr(tt.target)
-// 			if err != nil {
-// 				t.Errorf("parser.ParseExpr() error = %v", err)
-// 				return
-// 			}
-// 			err = filteringFunctions(exp, filters, nil)
-// 			if (err != nil) != tt.wantErr {
-// 				t.Errorf("filteringFunctions() error = %v, wantErr %v", err, tt.wantErr)
-// 				return
-// 			}
-// 			for m, gotFilter := range filters {
-// 				if wantFilter, ok := tt.want[m]; ok {
-// 					if !reflect.DeepEqual(wantFilter, gotFilter) {
-// 						t.Errorf("filteringFunctions()[%s]\n- %v\n+ %v", m, wantFilter, gotFilter)
-// 					}
-// 				} else {
-// 					t.Errorf("filteringFunctions()[%s]\n+ %v", m, gotFilter)
-// 				}
-// 			}
-// 			for m, wantFilter := range tt.want {
-// 				if _, ok := filters[m]; !ok {
-// 					t.Errorf("filteringFunctions()[%s]\n- %v", m, wantFilter)
-// 				}
-// 			}
-// 		})
-// 	}
-// }
-
 func TestExprMetrics(t *testing.T) {
 	//set backend filtering for exclude and average function
 	parser.FunctionMD.RLock()
@@ -710,9 +610,9 @@ func TestExprMetrics(t *testing.T) {
 						maxLenF = len(tt.want[i].Filter)
 					}
 					for j := 0; j < maxLenF; j++ {
-						if i >= len(got[i].Filter) {
+						if j >= len(got[i].Filter) {
 							t.Errorf("- expr.Metrics()[%d].Filter[%d] = %+v", i, j, tt.want[i].Filter[j])
-						} else if i >= len(tt.want) {
+						} else if j >= len(tt.want[i].Filter) {
 							t.Errorf("+ expr.Metrics()[%d].Filter[%d] = %+v", i, j, got[i].Filter[j])
 						} else if !reflect.DeepEqual(got[i].Filter[j], tt.want[i].Filter[j]) {
 							t.Errorf("- expr.Metrics()[%d].Filter[%d] = %+v", i, j, tt.want[i].Filter[j])
