@@ -17,6 +17,37 @@ import (
 
 type evaluator struct{}
 
+func filteringFunctions(e parser.Expr, filters []*pb.FilteringFunction) ([]*pb.FilteringFunction, error) {
+	var err error
+	if e.IsFunc() {
+		metadata.FunctionMD.RLock()
+		f, ok := metadata.FunctionMD.Functions[e.Target()]
+		metadata.FunctionMD.RUnlock()
+		if !ok {
+			return nil, merry.WithHTTPCode(helper.ErrUnknownFunction(e.Target()), 400)
+		}
+
+		var filter *pb.FilteringFunction
+		if f.CanBackendFiltered() {
+			filter = &pb.FilteringFunction{
+				Name: e.Target(),
+			}
+		}
+		for _, arg := range e.Args() {
+			if arg.IsString() {
+				filter.Arguments = append(filter.Arguments, arg.StringValue())
+			} else if filters, err = filteringFunctions(arg, filters); err != nil {
+				return nil, err
+			}
+		}
+		if f.CanBackendFiltered() {
+			filters = append(filters, filter)
+		}
+	}
+
+	return filters, nil
+}
+
 // FetchAndEvalExp fetch data and evalualtes expressions
 func (eval evaluator) FetchAndEvalExp(ctx context.Context, exp parser.Expr, from, until int64, values map[parser.MetricRequest][]*types.MetricData) ([]*types.MetricData, error) {
 	config.Config.Limiter.Enter()
@@ -28,13 +59,21 @@ func (eval evaluator) FetchAndEvalExp(ctx context.Context, exp parser.Expr, from
 	// values related to this particular `target=`
 	targetValues := make(map[parser.MetricRequest][]*types.MetricData)
 
+	var filters []*pb.FilteringFunction
+	var err error
+	filters, err = filteringFunctions(exp, filters)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, m := range exp.Metrics() {
 		fetchRequest := pb.FetchRequest{
-			Name:           m.Metric,
-			PathExpression: m.Metric,
-			StartTime:      m.From + from,
-			StopTime:       m.Until + until,
-			MaxDataPoints:  maxDataPoints,
+			Name:            m.Metric,
+			PathExpression:  m.Metric,
+			StartTime:       m.From + from,
+			StopTime:        m.Until + until,
+			MaxDataPoints:   maxDataPoints,
+			FilterFunctions: filters,
 		}
 		metricRequest := parser.MetricRequest{
 			Metric: fetchRequest.PathExpression,
@@ -138,7 +177,7 @@ func EvalExpr(ctx context.Context, e parser.Expr, from, until int64, values map[
 	} else if e.IsConst() {
 		p := types.MetricData{
 			FetchResponse: pb.FetchResponse{
-				Name: e.Target(),
+				Name:   e.Target(),
 				Values: []float64{e.FloatValue()},
 			},
 			Tags: map[string]string{"name": e.Target()},

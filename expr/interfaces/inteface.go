@@ -9,7 +9,8 @@ import (
 
 // FunctionBase is a set of base methods that partly satisfy Function interface and most probably nobody will modify
 type FunctionBase struct {
-	Evaluator Evaluator
+	Evaluator          Evaluator
+	canBackendFiltered bool
 }
 
 // SetEvaluator sets evaluator
@@ -20,6 +21,14 @@ func (b *FunctionBase) SetEvaluator(evaluator Evaluator) {
 // GetEvaluator returns evaluator
 func (b *FunctionBase) GetEvaluator() Evaluator {
 	return b.Evaluator
+}
+
+func (b *FunctionBase) CanBackendFiltered() bool {
+	return b.canBackendFiltered
+}
+
+func (b *FunctionBase) SetPass() {
+	b.canBackendFiltered = true
 }
 
 // Evaluator is a interface for any existing expression parser
@@ -54,6 +63,7 @@ type Function interface {
 	GetEvaluator() Evaluator
 	Do(ctx context.Context, e parser.Expr, from, until int64, values map[parser.MetricRequest][]*types.MetricData) ([]*types.MetricData, error)
 	Description() map[string]types.FunctionDescription
+	CanBackendFiltered() bool
 }
 
 // Function is interface that all graphite functions should follow
