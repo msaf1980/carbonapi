@@ -193,6 +193,8 @@ func copyReverse(filter []*pb.FilteringFunction) []*pb.FilteringFunction {
 //             etype: EtString
 //             valStr: "RejectedByFilter|SomeRequestsFailed"
 
+// tests for filter functions in expr/expr_metrics_test.go (TestExprMetrics) for avoid cyclic import
+
 func (e *expr) metrics(filterChain []*pb.FilteringFunction) ([]MetricRequestWithFilter, error) {
 	switch e.etype {
 	case EtName:
