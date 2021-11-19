@@ -264,6 +264,7 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 
 	errors := make(map[string]merry.Error)
 
+	// TODO: integrate with filter functions
 	var backendCacheKey string
 	if len(config.Config.TruncateTime) > 0 {
 		backendCacheKey = backendCacheComputeKeyAbs(from32, until32, targets)

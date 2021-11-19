@@ -4,6 +4,7 @@ import (
 	"context"
 
 	utilctx "github.com/go-graphite/carbonapi/util/ctx"
+	"github.com/msaf1980/go-stringutils"
 
 	"github.com/ansel1/merry"
 	"github.com/go-graphite/carbonapi/cmd/carbonapi/config"
@@ -17,6 +18,35 @@ import (
 
 type evaluator struct{}
 
+func metricPathWithFilter(path string, filter []*pb.FilteringFunction, n int) string {
+	if n < 0 || n > len(filter) {
+		n = len(filter)
+	}
+	if n == 0 {
+		return path
+	}
+	var sb stringutils.Builder
+	sb.Grow(len(path) + len(filter)*48)
+	sb.WriteString(path)
+	for i := 0; i < n; i++ {
+		sb.WriteString(" | ")
+		sb.WriteString(filter[i].Name)
+		sb.WriteByte('(')
+		for j, arg := range filter[i].Arguments {
+			if j == 0 {
+				sb.WriteByte('\'')
+			} else {
+				sb.WriteString(",'")
+			}
+			sb.WriteString(arg)
+			sb.WriteByte('\'')
+		}
+		sb.WriteByte(')')
+	}
+
+	return sb.String()
+}
+
 // FetchAndEvalExp fetch data and evalualtes expressions
 func (eval evaluator) FetchAndEvalExp(ctx context.Context, exp parser.Expr, from, until int64, values map[parser.MetricRequest][]*types.MetricData) ([]*types.MetricData, error) {
 	config.Config.Limiter.Enter()
@@ -28,13 +58,6 @@ func (eval evaluator) FetchAndEvalExp(ctx context.Context, exp parser.Expr, from
 	// values related to this particular `target=`
 	targetValues := make(map[parser.MetricRequest][]*types.MetricData)
 
-	//filters := make([]*pb.FilteringFunction, 0, 4)
-	// var err error
-	// filters, err = filteringFunctions(exp, filters)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
 	metrics, err := exp.Metrics()
 	if err != nil {
 		return nil, err
@@ -42,23 +65,27 @@ func (eval evaluator) FetchAndEvalExp(ctx context.Context, exp parser.Expr, from
 
 	for _, m := range metrics {
 		fetchRequest := pb.FetchRequest{
-			Name:           m.Metric,
-			PathExpression: m.Metric,
-			StartTime:      m.From + from,
-			StopTime:       m.Until + until,
-			MaxDataPoints:  maxDataPoints,
+			Name:            m.Metric,
+			PathExpression:  m.Metric,
+			StartTime:       m.From + from,
+			StopTime:        m.Until + until,
+			MaxDataPoints:   maxDataPoints,
+			FilterFunctions: m.Filter,
 		}
+
 		metricRequest := parser.MetricRequest{
-			Metric: fetchRequest.PathExpression,
+			Metric: metricPathWithFilter(fetchRequest.PathExpression, m.Filter, -1),
 			From:   fetchRequest.StartTime,
 			Until:  fetchRequest.StopTime,
 		}
 
 		// avoid multiple requests in a function, E.g divideSeries(a.b, a.b)
-		if cachedMetricRequest, ok := metricRequestCache[m.Metric]; ok &&
-			cachedMetricRequest.From == metricRequest.From &&
-			cachedMetricRequest.Until == metricRequest.Until {
-			continue
+		if m.Metric != metricRequest.Metric {
+			if cachedMetricRequest, ok := metricRequestCache[metricRequest.Metric]; ok &&
+				cachedMetricRequest.From == metricRequest.From &&
+				cachedMetricRequest.Until == metricRequest.Until {
+				continue
+			}
 		}
 
 		// avoid multiple requests in a http request, E.g render?target=a.b&target=a.b
@@ -72,7 +99,7 @@ func (eval evaluator) FetchAndEvalExp(ctx context.Context, exp parser.Expr, from
 			continue
 		}
 
-		metricRequestCache[m.Metric] = metricRequest
+		metricRequestCache[metricRequest.Metric] = metricRequest
 		targetValues[metricRequest] = nil
 		multiFetchRequest.Metrics = append(multiFetchRequest.Metrics, fetchRequest)
 	}
