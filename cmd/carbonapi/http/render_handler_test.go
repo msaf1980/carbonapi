@@ -30,7 +30,7 @@ func BenchmarkBackendCacheComputeKey(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		_ = backendCacheComputeKey(from, until, targets)
+		_ = backendCacheComputeKey(from, until, targets, 0)
 	}
 }
 
@@ -43,6 +43,6 @@ func BenchmarkBackendCacheComputeKeyAbs(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		_ = backendCacheComputeKeyAbs(from, until, targets)
+		_ = backendCacheComputeKeyAbs(from, until, targets, 0)
 	}
 }
