@@ -21,6 +21,10 @@ graphite:
     interval: "60s"
     prefix: "carbon.api"
     pattern: "{prefix}.{fqdn}"
+    # Batch buffered send
+    #batchSize: 1024
+    # Percentile stat metrics
+    #extendedStat: true
 idleConnections: 10
 pidFile: ""
 upstreams:

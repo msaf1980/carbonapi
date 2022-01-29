@@ -49,16 +49,33 @@ func tagHandler(w http.ResponseWriter, r *http.Request) {
 		RequestHeaders: requestHeaders,
 	}
 
+	ApiMetrics.Requests.Add(1)
+	ApiMetrics.FindRequests.Add(1)
+
 	logAsError := false
 	defer func() {
 		deferredAccessLogging(accessLogger, accessLogDetails, t0, logAsError)
+		if config.Config.Graphite.ExtendedStat {
+			if !accessLogDetails.FromCache {
+				ApiMetrics.FindRequestsTime.Add(accessLogDetails.Runtime)
+			}
+			if accessLogDetails.CarbonapiResponseSizeBytes > 0 {
+				ApiMetrics.FindRequestsSize.Add(float64(accessLogDetails.CarbonapiResponseSizeBytes))
+			}
+		}
 	}()
 
 	err := r.ParseForm()
 	if err != nil {
+		ApiMetrics.Errors.Add(1)
+		ApiMetrics.FindErrors.Add(1)
+		if config.Config.Graphite.ExtendedStat {
+			ApiMetrics.FindCounter400.Add(1)
+		}
+		setError(w, accessLogDetails, "form parse error", "form parse error: "+err.Error(), http.StatusBadRequest)
 		logAsError = true
-		w.Header().Set("Content-Type", contentTypeJSON)
-		_, _ = w.Write([]byte{'[', ']'})
+		// w.Header().Set("Content-Type", contentTypeJSON)
+		// _, _ = w.Write([]byte{'[', ']'})
 		return
 	}
 
@@ -87,17 +104,61 @@ func tagHandler(w http.ResponseWriter, r *http.Request) {
 	} else if strings.HasSuffix(r.URL.Path, "values") || strings.HasSuffix(r.URL.Path, "values/") {
 		res, err = config.Config.ZipperInstance.TagValues(ctx, rawQuery, limit)
 	} else {
+		if config.Config.Graphite.ExtendedStat {
+			ApiMetrics.FindCounter404.Add(1)
+		}
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-		accessLogDetails.HTTPCode = http.StatusNotFound
 		return
 	}
 
+	returnCode := http.StatusOK
+
 	// TODO(civil): Implement stats
-	if err != nil && !merry.Is(err, types.ErrNoMetricsFetched) && !merry.Is(err, types.ErrNonFatalErrors) {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		accessLogDetails.HTTPCode = http.StatusInternalServerError
-		accessLogDetails.Reason = err.Error()
-		logAsError = true
+	if err != nil {
+		if merry.Is(err, types.ErrNoMetricsFetched) {
+			returnCode = http.StatusNotFound
+		} else {
+			returnCode = merry.HTTPCode(err)
+		}
+
+		if config.Config.Graphite.ExtendedStat {
+			switch returnCode {
+			case http.StatusBadRequest:
+				ApiMetrics.FindCounter400.Add(1)
+			case http.StatusForbidden:
+				ApiMetrics.FindCounter403.Add(1)
+			case http.StatusNotFound:
+				ApiMetrics.FindCounter404.Add(1)
+			case http.StatusInternalServerError:
+				ApiMetrics.FindCounter500.Add(1)
+			case http.StatusBadGateway:
+				ApiMetrics.FindCounter502.Add(1)
+			case http.StatusServiceUnavailable:
+				ApiMetrics.FindCounter503.Add(1)
+			case http.StatusGatewayTimeout:
+				ApiMetrics.FindCounter504.Add(1)
+			}
+		}
+
+		if returnCode == http.StatusNotFound {
+			returnCode = config.Config.NotFoundStatusCode
+		}
+
+		if returnCode == http.StatusForbidden {
+			setError(w, accessLogDetails, "limits reached", err.Error(), returnCode)
+		} else if returnCode != config.Config.NotFoundStatusCode {
+			ApiMetrics.Errors.Add(1)
+			ApiMetrics.FindErrors.Add(1)
+			if returnCode == http.StatusInternalServerError {
+				setError(w, accessLogDetails, "internal server error", err.Error(), returnCode)
+			} else {
+				setError(w, accessLogDetails, "failed to fetch data", err.Error(), returnCode)
+			}
+			if returnCode >= 500 {
+				logAsError = true
+			}
+		}
+
 		return
 	}
 
@@ -109,15 +170,22 @@ func tagHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		accessLogDetails.HTTPCode = http.StatusInternalServerError
-		accessLogDetails.Reason = err.Error()
+		ApiMetrics.Errors.Add(1)
+		ApiMetrics.FindErrors.Add(1)
+		if config.Config.Graphite.ExtendedStat {
+			ApiMetrics.FindCounter500.Add(1)
+		}
+		setError(w, accessLogDetails, "internal error", "marhal response error: "+err.Error(), http.StatusInternalServerError)
 		logAsError = true
 		return
 	}
 
 	w.Header().Set("Content-Type", contentTypeJSON)
-	_, _ = w.Write(b)
-	accessLogDetails.Runtime = time.Since(t0).Seconds()
+	_, err = w.Write(b)
+
+	if config.Config.Graphite.ExtendedStat {
+		ApiMetrics.FindCounter200.Add(1)
+	}
+
 	accessLogDetails.HTTPCode = http.StatusOK
 }

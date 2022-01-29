@@ -39,9 +39,9 @@ func cleanupParams(r *http.Request) {
 	r.Form.Del("_t") // Used by jquery.graphite.js
 }
 
-func setError(w http.ResponseWriter, accessLogDetails *carbonapipb.AccessLogDetails, msg string, status int) {
+func setError(w http.ResponseWriter, accessLogDetails *carbonapipb.AccessLogDetails, msg, logMsg string, status int) {
 	http.Error(w, http.StatusText(status)+": "+msg, status)
-	accessLogDetails.Reason = msg
+	accessLogDetails.Reason = logMsg
 	accessLogDetails.HTTPCode = int32(status)
 }
 
@@ -96,13 +96,27 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 	logAsError := false
 	defer func() {
 		deferredAccessLogging(accessLogger, accessLogDetails, t0, logAsError)
+		if config.Config.Graphite.ExtendedStat {
+			if !accessLogDetails.FromCache {
+				ApiMetrics.RenderRequestsTime.Add(accessLogDetails.Runtime)
+			}
+			if accessLogDetails.CarbonapiResponseSizeBytes > 0 {
+				ApiMetrics.RenderRequestsSize.Add(float64(accessLogDetails.CarbonapiResponseSizeBytes))
+			}
+		}
 	}()
 
 	ApiMetrics.Requests.Add(1)
+	ApiMetrics.RenderRequests.Add(1)
 
 	err := r.ParseForm()
 	if err != nil {
-		setError(w, accessLogDetails, err.Error(), http.StatusBadRequest)
+		ApiMetrics.Errors.Add(1)
+		ApiMetrics.RenderErrors.Add(1)
+		if config.Config.Graphite.ExtendedStat {
+			ApiMetrics.RenderCounter400.Add(1)
+		}
+		setError(w, accessLogDetails, "form parse error", "form parse error: "+err.Error(), http.StatusBadRequest)
 		logAsError = true
 		return
 	}
@@ -141,7 +155,15 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 	case "ns", "nanosecond", "nanoseconds":
 		timestampMultiplier = 1000000000
 	default:
-		setError(w, accessLogDetails, "unsupported timestamp format, supported: 's', 'ms', 'us', 'ns'", http.StatusBadRequest)
+		ApiMetrics.Errors.Add(1)
+		ApiMetrics.RenderErrors.Add(1)
+		if config.Config.Graphite.ExtendedStat {
+			ApiMetrics.RenderCounter400.Add(1)
+		}
+		setError(w, accessLogDetails,
+			"unsupported timestamp format, supported: 's', 'ms', 'us', 'ns'",
+			"unsupported timestamp format, supported: 's', 'ms', 'us', 'ns'", http.StatusBadRequest,
+		)
 		logAsError = true
 		return
 	}
@@ -169,7 +191,12 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 	accessLogDetails.Targets = targets
 
 	if !ok || !format.ValidRenderFormat() {
-		setError(w, accessLogDetails, "unsupported format specified: "+formatRaw, http.StatusBadRequest)
+		ApiMetrics.Errors.Add(1)
+		ApiMetrics.RenderErrors.Add(1)
+		if config.Config.Graphite.ExtendedStat {
+			ApiMetrics.RenderCounter400.Add(1)
+		}
+		setError(w, accessLogDetails, "unsupported format specified", "unsupported format specified: "+formatRaw, http.StatusBadRequest)
 		logAsError = true
 		return
 	}
@@ -177,9 +204,13 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 	if format == protoV3Format {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			accessLogDetails.HTTPCode = http.StatusBadRequest
-			accessLogDetails.Reason = "failed to parse message body: " + err.Error()
-			http.Error(w, "bad request (failed to parse format): "+err.Error(), http.StatusBadRequest)
+			ApiMetrics.Errors.Add(1)
+			ApiMetrics.RenderErrors.Add(1)
+			if config.Config.Graphite.ExtendedStat {
+				ApiMetrics.RenderCounter400.Add(1)
+			}
+			setError(w, accessLogDetails, "failed to read message body", "failed to read message body: "+err.Error(), http.StatusBadRequest)
+			logAsError = true
 			return
 		}
 
@@ -187,9 +218,13 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 		err = pv3Request.Unmarshal(body)
 
 		if err != nil {
-			accessLogDetails.HTTPCode = http.StatusBadRequest
-			accessLogDetails.Reason = "failed to parse message body: " + err.Error()
-			http.Error(w, "bad request (failed to parse format): "+err.Error(), http.StatusBadRequest)
+			ApiMetrics.Errors.Add(1)
+			ApiMetrics.RenderErrors.Add(1)
+			if config.Config.Graphite.ExtendedStat {
+				ApiMetrics.RenderCounter400.Add(1)
+			}
+			setError(w, accessLogDetails, "failed to parse message body", "failed to parse message body: "+err.Error(), http.StatusBadRequest)
+			logAsError = true
 			return
 		}
 
@@ -199,6 +234,17 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 		for i, r := range pv3Request.Metrics {
 			targets[i] = r.PathExpression
 		}
+	}
+
+	if from32 == until32 {
+		ApiMetrics.Errors.Add(1)
+		ApiMetrics.RenderErrors.Add(1)
+		if config.Config.Graphite.ExtendedStat {
+			ApiMetrics.RenderCounter400.Add(1)
+		}
+		setError(w, accessLogDetails, "invalid or empty time range", "invalid or empty time range", http.StatusBadRequest)
+		logAsError = true
+		return
 	}
 
 	if useCache {
@@ -212,34 +258,33 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 
 		if err == nil {
 			ApiMetrics.RequestCacheHits.Add(1)
+			if config.Config.Graphite.ExtendedStat {
+				ApiMetrics.RenderCounter200.Add(1)
+			}
 			writeResponse(w, http.StatusOK, response, format, jsonp)
 			accessLogDetails.FromCache = true
 			return
 		}
-		ApiMetrics.RequestCacheMisses.Add(1)
-	}
-
-	if from32 == until32 {
-		setError(w, accessLogDetails, "Invalid or empty time range", http.StatusBadRequest)
-		logAsError = true
-		return
 	}
 
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error("panic during eval:",
-				zap.String("cache_key", responseCacheKey),
-				zap.Any("reason", r),
-				zap.Stack("stack"),
-			)
+			ApiMetrics.Errors.Add(1)
+			ApiMetrics.RenderErrors.Add(1)
+			if config.Config.Graphite.ExtendedStat {
+				ApiMetrics.RenderCounter500.Add(1)
+			}
+			stack := zap.Stack("stack")
+			stackTrace := fmt.Sprintf("panic during eval: %v\nStack trace: %vs", r, stack.String)
 			logAsError = true
 			var answer string
 			if config.Config.HTTPResponseStackTrace {
-				answer = fmt.Sprintf("%v\nStack trace: %v", r, zap.Stack("").String)
+				answer = fmt.Sprintf("%v\nStack trace: %v", r, stack.String)
 			} else {
 				answer = fmt.Sprint(r)
 			}
-			setError(w, accessLogDetails, answer, http.StatusInternalServerError)
+			setError(w, accessLogDetails, answer, stackTrace, http.StatusInternalServerError)
+			logAsError = true
 		}
 	}()
 
@@ -256,8 +301,13 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 		for _, target := range targets {
 			exp, e, err := parser.ParseExpr(target)
 			if err != nil || e != "" {
+				ApiMetrics.Errors.Add(1)
+				ApiMetrics.RenderErrors.Add(1)
+				if config.Config.Graphite.ExtendedStat {
+					ApiMetrics.RenderCounter400.Add(1)
+				}
 				msg := buildParseErrorString(target, e, err)
-				setError(w, accessLogDetails, msg, http.StatusBadRequest)
+				setError(w, accessLogDetails, msg, msg, http.StatusBadRequest)
 				logAsError = true
 				return
 			}
@@ -311,16 +361,36 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		logger.Debug("error response or no response", zap.Strings("error", errMsgs))
 		// Allow override status code for 404-not-found replies.
+
+		if config.Config.Graphite.ExtendedStat {
+			switch returnCode {
+			case http.StatusBadRequest:
+				ApiMetrics.RenderCounter400.Add(1)
+			case http.StatusForbidden:
+				ApiMetrics.RenderCounter403.Add(1)
+			case http.StatusNotFound:
+				ApiMetrics.RenderCounter404.Add(1)
+			case http.StatusInternalServerError:
+				ApiMetrics.RenderCounter500.Add(1)
+			case http.StatusBadGateway:
+				ApiMetrics.RenderCounter502.Add(1)
+			case http.StatusServiceUnavailable:
+				ApiMetrics.RenderCounter503.Add(1)
+			case http.StatusGatewayTimeout:
+				ApiMetrics.RenderCounter504.Add(1)
+			}
+		}
+
 		if returnCode == 404 {
 			returnCode = config.Config.NotFoundStatusCode
-		}
-		if returnCode == 400 {
-			setError(w, accessLogDetails, strings.Join(errMsgs, ","), returnCode)
+		} else if returnCode == 400 {
+			errs := strings.Join(errMsgs, ",")
+			setError(w, accessLogDetails, errs, errs, returnCode)
 			logAsError = true
 			return
-		}
-		if returnCode >= 500 {
-			setError(w, accessLogDetails, "error or no response: "+strings.Join(errMsgs, ","), returnCode)
+		} else if returnCode >= 500 {
+			errs := strings.Join(errMsgs, ",")
+			setError(w, accessLogDetails, errs, errs, returnCode)
 			logAsError = true
 			return
 		}
@@ -337,14 +407,24 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 	case protoV2Format:
 		body, err = types.MarshalProtobufV2(results)
 		if err != nil {
-			setError(w, accessLogDetails, err.Error(), http.StatusInternalServerError)
+			ApiMetrics.Errors.Add(1)
+			ApiMetrics.RenderErrors.Add(1)
+			if config.Config.Graphite.ExtendedStat {
+				ApiMetrics.RenderCounter500.Add(1)
+			}
+			setError(w, accessLogDetails, "marshal response", "marshal response: "+err.Error(), http.StatusInternalServerError)
 			logAsError = true
 			return
 		}
 	case protoV3Format:
 		body, err = types.MarshalProtobufV3(results)
 		if err != nil {
-			setError(w, accessLogDetails, err.Error(), http.StatusInternalServerError)
+			ApiMetrics.Errors.Add(1)
+			ApiMetrics.RenderErrors.Add(1)
+			if config.Config.Graphite.ExtendedStat {
+				ApiMetrics.RenderCounter500.Add(1)
+			}
+			setError(w, accessLogDetails, "marshal response", "marshal response: "+err.Error(), http.StatusInternalServerError)
 			logAsError = true
 			return
 		}
@@ -371,6 +451,10 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 		config.Config.ResponseCache.Set(responseCacheKey, body, responseCacheTimeout)
 		td := time.Since(tc).Nanoseconds()
 		ApiMetrics.RenderCacheOverheadNS.Add(td)
+	}
+
+	if config.Config.Graphite.ExtendedStat {
+		ApiMetrics.RenderCounter200.Add(1)
 	}
 
 	gotErrors := len(errors) > 0

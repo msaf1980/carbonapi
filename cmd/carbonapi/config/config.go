@@ -30,10 +30,12 @@ type CacheConfig struct {
 }
 
 type GraphiteConfig struct {
-	Pattern  string
-	Host     string
-	Interval time.Duration
-	Prefix   string
+	Pattern      string        `mapstructure:"pattern"`
+	Host         string        `mapstructure:"host"`
+	Interval     time.Duration `mapstructure:"interval"`
+	Prefix       string        `mapstructure:"prefix"`
+	BatchSize    int           `mapstructure:"batchSize"`
+	ExtendedStat bool          `mapstructure:"extendedStat"`
 }
 
 type Define struct {

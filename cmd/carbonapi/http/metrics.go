@@ -9,77 +9,145 @@ import (
 	"github.com/go-graphite/carbonapi/cmd/carbonapi/config"
 	zipperTypes "github.com/go-graphite/carbonapi/zipper/types"
 	"go.uber.org/zap"
+
+	"github.com/msaf1980/g2g/pkg/expvars"
+	"github.com/msaf1980/g2gcounters"
 )
 
 var ApiMetrics = struct {
-	Requests              *expvar.Int
-	RenderRequests        *expvar.Int
-	RequestCacheHits      *expvar.Int
-	RequestCacheMisses    *expvar.Int
-	BackendCacheHits      *expvar.Int
-	BackendCacheMisses    *expvar.Int
-	RenderCacheOverheadNS *expvar.Int
+	Requests *expvars.Int
+	// Timeouts *expvars.Int
+	Errors *expvars.Int
+
+	RenderRequests *expvars.Int
+	// TODO: implement timeouts stat
+	// RenderTimeouts        *expvars.Int
+	RenderErrors          *expvars.Int
+	RequestCacheHits      *expvars.Int
+	RequestCacheMisses    *expvars.Int
+	BackendCacheHits      *expvars.Int
+	BackendCacheMisses    *expvars.Int
+	RenderCacheOverheadNS *expvars.Int
 	RequestBuckets        expvar.Func
 
-	FindRequests *expvar.Int
+	FindRequests *expvars.Int
+	// TODO: implement timeouts stat
+	// FindTimeouts        *expvars.Int
+	FindErrors *expvars.Int
+
+	// TODO: implements info stat
+	// InfoRequests *expvars.Int
+	// InfoTimeouts *expvars.Int
+	// InfoErrors   *expvars.Int
 
 	MemcacheTimeouts expvar.Func
 
 	CacheSize  expvar.Func
 	CacheItems expvar.Func
-}{
-	Requests: expvar.NewInt("requests"),
-	// TODO: request_cache -> render_cache
-	RenderRequests:        expvar.NewInt("render_requests"),
-	RequestCacheHits:      expvar.NewInt("request_cache_hits"),
-	RequestCacheMisses:    expvar.NewInt("request_cache_misses"),
-	BackendCacheHits:      expvar.NewInt("backend_cache_hits"),
-	BackendCacheMisses:    expvar.NewInt("backend_cache_misses"),
-	RenderCacheOverheadNS: expvar.NewInt("render_cache_overhead_ns"),
 
-	FindRequests: expvar.NewInt("find_requests"),
+	RenderRequestsTime *g2gcounters.Timer // all queries (non-response cached)
+	RenderRequestsSize *g2gcounters.Timer
+
+	RenderCounter200 *g2gcounters.ERate
+	RenderCounter400 *g2gcounters.ERate
+	RenderCounter403 *g2gcounters.ERate
+	RenderCounter404 *g2gcounters.ERate
+	RenderCounter500 *g2gcounters.ERate
+	RenderCounter502 *g2gcounters.ERate
+	RenderCounter503 *g2gcounters.ERate
+	RenderCounter504 *g2gcounters.ERate
+
+	FindRequestsTime *g2gcounters.Timer // all queries (non-response cached)
+	FindRequestsSize *g2gcounters.Timer
+
+	FindCounter200 *g2gcounters.ERate
+	FindCounter400 *g2gcounters.ERate
+	FindCounter403 *g2gcounters.ERate
+	FindCounter404 *g2gcounters.ERate
+	FindCounter500 *g2gcounters.ERate
+	FindCounter502 *g2gcounters.ERate
+	FindCounter503 *g2gcounters.ERate
+	FindCounter504 *g2gcounters.ERate
+}{
+	Requests: expvars.NewInt("requests"),
+	Errors:   expvars.NewInt("errors"),
+	// TODO: request_cache -> render_cache
+	RenderRequests:        expvars.NewInt("render_requests"),
+	RenderErrors:          expvars.NewInt("render_errors"),
+	RequestCacheHits:      expvars.NewInt("request_cache_hits"),
+	RequestCacheMisses:    expvars.NewInt("request_cache_misses"),
+	BackendCacheHits:      expvars.NewInt("backend_cache_hits"),
+	BackendCacheMisses:    expvars.NewInt("backend_cache_misses"),
+	RenderCacheOverheadNS: expvars.NewInt("render_cache_overhead_ns"),
+
+	FindRequests: expvars.NewInt("find_requests"),
+	FindErrors:   expvars.NewInt("find_errors"),
+
+	RenderRequestsTime: g2gcounters.NewTimer("render_requests_time"),
+	RenderRequestsSize: g2gcounters.NewTimer("render_requests_size"),
+
+	RenderCounter200: g2gcounters.NewERate("render_requests_status.200"),
+	RenderCounter400: g2gcounters.NewERate("render_requests_status.400"),
+	RenderCounter403: g2gcounters.NewERate("render_requests_status.403"),
+	RenderCounter404: g2gcounters.NewERate("render_requests_status.404"),
+	RenderCounter500: g2gcounters.NewERate("render_requests_status.500"),
+	RenderCounter502: g2gcounters.NewERate("render_requests_status.502"),
+	RenderCounter503: g2gcounters.NewERate("render_requests_status.503"),
+	RenderCounter504: g2gcounters.NewERate("render_requests_status.504"),
+
+	FindRequestsTime: g2gcounters.NewTimer("find_requests_time"),
+	FindRequestsSize: g2gcounters.NewTimer("find_requests_size"),
+
+	FindCounter200: g2gcounters.NewERate("find_requests_status.200"),
+	FindCounter400: g2gcounters.NewERate("find_requests_status.400"),
+	FindCounter403: g2gcounters.NewERate("find_requests_status.403"),
+	FindCounter404: g2gcounters.NewERate("find_requests_status.404"),
+	FindCounter500: g2gcounters.NewERate("find_requests_status.500"),
+	FindCounter502: g2gcounters.NewERate("find_requests_status.502"),
+	FindCounter503: g2gcounters.NewERate("find_requests_status.503"),
+	FindCounter504: g2gcounters.NewERate("find_requests_status.504"),
 }
 
 var ZipperMetrics = struct {
-	FindRequests *expvar.Int
-	FindTimeouts *expvar.Int
-	FindErrors   *expvar.Int
+	FindRequests *expvars.Int
+	FindTimeouts *expvars.Int
+	FindErrors   *expvars.Int
 
-	SearchRequests *expvar.Int
+	SearchRequests *expvars.Int
 
-	RenderRequests *expvar.Int
-	RenderTimeouts *expvar.Int
-	RenderErrors   *expvar.Int
+	RenderRequests *expvars.Int
+	RenderTimeouts *expvars.Int
+	RenderErrors   *expvars.Int
 
-	InfoRequests *expvar.Int
-	InfoTimeouts *expvar.Int
-	InfoErrors   *expvar.Int
+	InfoRequests *expvars.Int
+	InfoTimeouts *expvars.Int
+	InfoErrors   *expvars.Int
 
-	Timeouts *expvar.Int
+	Timeouts *expvars.Int
 
 	CacheSize   expvar.Func
 	CacheItems  expvar.Func
-	CacheMisses *expvar.Int
-	CacheHits   *expvar.Int
+	CacheMisses *expvars.Int
+	CacheHits   *expvars.Int
 }{
-	FindRequests: expvar.NewInt("zipper_find_requests"),
-	FindTimeouts: expvar.NewInt("zipper_find_timeouts"),
-	FindErrors:   expvar.NewInt("zipper_find_errors"),
+	FindRequests: expvars.NewInt("zipper_find_requests"),
+	FindTimeouts: expvars.NewInt("zipper_find_timeouts"),
+	FindErrors:   expvars.NewInt("zipper_find_errors"),
 
-	SearchRequests: expvar.NewInt("zipper_search_requests"),
+	SearchRequests: expvars.NewInt("zipper_search_requests"),
 
-	RenderRequests: expvar.NewInt("zipper_render_requests"),
-	RenderTimeouts: expvar.NewInt("zipper_render_timeouts"),
-	RenderErrors:   expvar.NewInt("zipper_render_errors"),
+	RenderRequests: expvars.NewInt("zipper_render_requests"),
+	RenderTimeouts: expvars.NewInt("zipper_render_timeouts"),
+	RenderErrors:   expvars.NewInt("zipper_render_errors"),
 
-	InfoRequests: expvar.NewInt("zipper_info_requests"),
-	InfoTimeouts: expvar.NewInt("zipper_info_timeouts"),
-	InfoErrors:   expvar.NewInt("zipper_info_errors"),
+	InfoRequests: expvars.NewInt("zipper_info_requests"),
+	InfoTimeouts: expvars.NewInt("zipper_info_timeouts"),
+	InfoErrors:   expvars.NewInt("zipper_info_errors"),
 
-	Timeouts: expvar.NewInt("zipper_timeouts"),
+	Timeouts: expvars.NewInt("zipper_timeouts"),
 
-	CacheHits:   expvar.NewInt("zipper_cache_hits"),
-	CacheMisses: expvar.NewInt("zipper_cache_misses"),
+	CacheHits:   expvars.NewInt("zipper_cache_hits"),
+	CacheMisses: expvars.NewInt("zipper_cache_misses"),
 }
 
 func ZipperStats(stats *zipperTypes.Stats) {

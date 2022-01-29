@@ -19,7 +19,7 @@ one.) For example,
 
 ```go
 var (
-	loadedRecords = expvar.NewInt("records loaded into the player")
+	loadedRecords = expvars.NewInt("records loaded into the player")
 )
 
 func LoadThemAll() {
@@ -52,3 +52,20 @@ Now, every `interval` time-period, all Registered expvars will be published to
 the Graphite server.
 
 Operations on the Graphite structure are goroutine-safe.
+
+
+For batch send
+
+```go
+func main() {
+
+	// ...
+
+	interval := 30 * time.Second
+	timeout := 3 * time.Second
+	g := g2g.NewGraphiteBatch("graphite-server:2003", interval, timeout, 4096)
+	g.Register("foo.service.records.loaded", loadedRecords)
+
+	// ...
+}
+```

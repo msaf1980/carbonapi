@@ -95,11 +95,17 @@ github.com/mitchellh/mapstructure
 ## explicit
 github.com/mjibson/go-dsp/dsputils
 github.com/mjibson/go-dsp/fft
+# github.com/msaf1980/g2g v0.0.8
+## explicit
+github.com/msaf1980/g2g
+github.com/msaf1980/g2g/pkg/expvars
+# github.com/msaf1980/g2gcounters v0.0.6
+## explicit
+github.com/msaf1980/g2gcounters
 # github.com/pelletier/go-toml v1.2.0
 github.com/pelletier/go-toml
 # github.com/peterbourgon/g2g v0.0.0-20161124161852-0c2bab2b173d
 ## explicit
-github.com/peterbourgon/g2g
 # github.com/philhofer/fwd v1.0.0
 ## explicit
 github.com/philhofer/fwd
@@ -123,7 +129,7 @@ github.com/spf13/pflag
 # github.com/spf13/viper v1.6.3
 ## explicit
 github.com/spf13/viper
-# github.com/stretchr/testify v1.5.1
+# github.com/stretchr/testify v1.7.0
 ## explicit
 github.com/stretchr/testify/assert
 # github.com/subosito/gotenv v1.2.0
@@ -268,3 +274,5 @@ gopkg.in/ini.v1
 # gopkg.in/yaml.v2 v2.2.8
 ## explicit
 gopkg.in/yaml.v2
+# gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
+gopkg.in/yaml.v3

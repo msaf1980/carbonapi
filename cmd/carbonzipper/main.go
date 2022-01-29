@@ -34,7 +34,8 @@ import (
 	"github.com/go-graphite/carbonapi/zipper/types"
 
 	pickle "github.com/lomik/og-rek"
-	"github.com/peterbourgon/g2g"
+	"github.com/msaf1980/g2g"
+	"github.com/msaf1980/g2g/pkg/expvars"
 
 	uuid "github.com/satori/go.uuid"
 	"go.uber.org/zap"
@@ -108,45 +109,45 @@ var config = struct {
 
 // Metrics contains grouped expvars for /debug/vars and graphite
 var Metrics = struct {
-	FindRequests *expvar.Int
-	FindErrors   *expvar.Int
+	FindRequests *expvars.Int
+	FindErrors   *expvars.Int
 
-	SearchRequests *expvar.Int
+	SearchRequests *expvars.Int
 
-	RenderRequests *expvar.Int
-	RenderErrors   *expvar.Int
+	RenderRequests *expvars.Int
+	RenderErrors   *expvars.Int
 
-	InfoRequests *expvar.Int
-	InfoErrors   *expvar.Int
+	InfoRequests *expvars.Int
+	InfoErrors   *expvars.Int
 
-	Timeouts *expvar.Int
+	Timeouts *expvars.Int
 
 	CacheSize         expvar.Func
 	CacheItems        expvar.Func
-	CacheMisses       *expvar.Int
-	CacheHits         *expvar.Int
+	CacheMisses       *expvars.Int
+	CacheHits         *expvars.Int
 	SearchCacheSize   expvar.Func
 	SearchCacheItems  expvar.Func
-	SearchCacheMisses *expvar.Int
-	SearchCacheHits   *expvar.Int
+	SearchCacheMisses *expvars.Int
+	SearchCacheHits   *expvars.Int
 }{
-	FindRequests: expvar.NewInt("find_requests"),
-	FindErrors:   expvar.NewInt("find_errors"),
+	FindRequests: expvars.NewInt("find_requests"),
+	FindErrors:   expvars.NewInt("find_errors"),
 
-	SearchRequests: expvar.NewInt("search_requests"),
+	SearchRequests: expvars.NewInt("search_requests"),
 
-	RenderRequests: expvar.NewInt("render_requests"),
-	RenderErrors:   expvar.NewInt("render_errors"),
+	RenderRequests: expvars.NewInt("render_requests"),
+	RenderErrors:   expvars.NewInt("render_errors"),
 
-	InfoRequests: expvar.NewInt("info_requests"),
-	InfoErrors:   expvar.NewInt("info_errors"),
+	InfoRequests: expvars.NewInt("info_requests"),
+	InfoErrors:   expvars.NewInt("info_errors"),
 
-	Timeouts: expvar.NewInt("timeouts"),
+	Timeouts: expvars.NewInt("timeouts"),
 
-	CacheHits:         expvar.NewInt("cache_hits"),
-	CacheMisses:       expvar.NewInt("cache_misses"),
-	SearchCacheHits:   expvar.NewInt("search_cache_hits"),
-	SearchCacheMisses: expvar.NewInt("search_cache_misses"),
+	CacheHits:         expvars.NewInt("cache_hits"),
+	CacheMisses:       expvars.NewInt("cache_misses"),
+	SearchCacheHits:   expvars.NewInt("search_cache_hits"),
+	SearchCacheMisses: expvars.NewInt("search_cache_misses"),
 }
 
 // BuildVersion is defined at build and reported at startup and as expvar

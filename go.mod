@@ -24,12 +24,14 @@ require (
 	github.com/lomik/zapwriter v0.0.0-20180906104450-2ec2b9a61680
 	github.com/maruel/natural v0.0.0-20180416170133-dbcb3e2e8cf1
 	github.com/mjibson/go-dsp v0.0.0-20180508042940-11479a337f12
-	github.com/peterbourgon/g2g v0.0.0-20161124161852-0c2bab2b173d
+	github.com/msaf1980/g2g v0.0.8
+	github.com/msaf1980/g2gcounters v0.0.6
+	github.com/peterbourgon/g2g v0.0.0-20161124161852-0c2bab2b173d // indirect
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/rs/dnscache v0.0.0-20210201191234-295bba877686
 	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/viper v1.6.3
-	github.com/stretchr/testify v1.5.1
+	github.com/stretchr/testify v1.7.0
 	github.com/tinylib/msgp v1.1.2
 	github.com/valyala/fastjson v1.6.1
 	github.com/wangjohn/quickselect v0.0.0-20161129230411-ed8402a42d5f

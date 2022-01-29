@@ -9,7 +9,7 @@ import (
 	"github.com/go-graphite/carbonapi/cmd/carbonapi/config"
 	"github.com/go-graphite/carbonapi/cmd/carbonapi/http"
 	"github.com/go-graphite/carbonapi/mstats"
-	"github.com/peterbourgon/g2g"
+	"github.com/msaf1980/g2g"
 	"go.uber.org/zap"
 )
 
@@ -33,7 +33,7 @@ func setupGraphiteMetrics(logger *zap.Logger) {
 
 	if host != "" {
 		// register our metrics with graphite
-		graphite := g2g.NewGraphite(host, config.Config.Graphite.Interval, 10*time.Second)
+		graphite := g2g.NewGraphiteBatch(host, config.Config.Graphite.Interval, 10*time.Second, config.Config.Graphite.BatchSize)
 
 		hostname, _ := os.Hostname()
 		hostname = strings.ReplaceAll(hostname, ".", "_")
@@ -45,6 +45,7 @@ func setupGraphiteMetrics(logger *zap.Logger) {
 		pattern = strings.ReplaceAll(pattern, "{fqdn}", hostname)
 
 		graphite.Register(fmt.Sprintf("%s.requests", pattern), http.ApiMetrics.Requests)
+		graphite.Register(fmt.Sprintf("%s.errors", pattern), http.ApiMetrics.Errors)
 		graphite.Register(fmt.Sprintf("%s.request_cache_hits", pattern), http.ApiMetrics.RequestCacheHits)
 		graphite.Register(fmt.Sprintf("%s.request_cache_misses", pattern), http.ApiMetrics.RequestCacheMisses)
 		graphite.Register(fmt.Sprintf("%s.request_cache_overhead_ns", pattern), http.ApiMetrics.RenderCacheOverheadNS)
@@ -56,7 +57,39 @@ func setupGraphiteMetrics(logger *zap.Logger) {
 		}
 
 		graphite.Register(fmt.Sprintf("%s.find_requests", pattern), http.ApiMetrics.FindRequests)
+		graphite.Register(fmt.Sprintf("%s.find_errors", pattern), http.ApiMetrics.FindErrors)
 		graphite.Register(fmt.Sprintf("%s.render_requests", pattern), http.ApiMetrics.RenderRequests)
+		graphite.Register(fmt.Sprintf("%s.render_errors", pattern), http.ApiMetrics.RenderErrors)
+
+		if config.Config.Graphite.ExtendedStat {
+			graphite.MRegister(fmt.Sprintf("%s.render_requests_time", pattern), http.ApiMetrics.RenderRequestsTime)
+			graphite.MRegister(fmt.Sprintf("%s.render_requests_size", pattern), http.ApiMetrics.RenderRequestsSize)
+
+			graphite.MRegister(fmt.Sprintf("%s.render_requests_status.200", pattern), http.ApiMetrics.RenderCounter200)
+
+			graphite.MRegister(fmt.Sprintf("%s.render_requests_status.400", pattern), http.ApiMetrics.RenderCounter400)
+			graphite.MRegister(fmt.Sprintf("%s.render_requests_status.403", pattern), http.ApiMetrics.RenderCounter403)
+			graphite.MRegister(fmt.Sprintf("%s.render_requests_status.404", pattern), http.ApiMetrics.RenderCounter404)
+
+			graphite.MRegister(fmt.Sprintf("%s.render_requests_status.500", pattern), http.ApiMetrics.RenderCounter500)
+			graphite.MRegister(fmt.Sprintf("%s.render_requests_status.502", pattern), http.ApiMetrics.RenderCounter502)
+			graphite.MRegister(fmt.Sprintf("%s.render_requests_status.503", pattern), http.ApiMetrics.RenderCounter503)
+			graphite.MRegister(fmt.Sprintf("%s.render_requests_status.504", pattern), http.ApiMetrics.RenderCounter504)
+
+			graphite.MRegister(fmt.Sprintf("%s.find_requests_time", pattern), http.ApiMetrics.FindRequestsTime)
+			graphite.MRegister(fmt.Sprintf("%s.find_requests_size", pattern), http.ApiMetrics.FindRequestsSize)
+
+			graphite.MRegister(fmt.Sprintf("%s.find_requests_status.200", pattern), http.ApiMetrics.FindCounter200)
+
+			graphite.MRegister(fmt.Sprintf("%s.find_requests_status.400", pattern), http.ApiMetrics.FindCounter400)
+			graphite.MRegister(fmt.Sprintf("%s.find_requests_status.403", pattern), http.ApiMetrics.FindCounter403)
+			graphite.MRegister(fmt.Sprintf("%s.find_requests_status.404", pattern), http.ApiMetrics.FindCounter404)
+
+			graphite.MRegister(fmt.Sprintf("%s.find_requests_status.500", pattern), http.ApiMetrics.FindCounter500)
+			graphite.MRegister(fmt.Sprintf("%s.find_requests_status.502", pattern), http.ApiMetrics.FindCounter502)
+			graphite.MRegister(fmt.Sprintf("%s.find_requests_status.503", pattern), http.ApiMetrics.FindCounter503)
+			graphite.MRegister(fmt.Sprintf("%s.find_requests_status.504", pattern), http.ApiMetrics.FindCounter504)
+		}
 
 		if http.ApiMetrics.MemcacheTimeouts != nil {
 			graphite.Register(fmt.Sprintf("%s.memcache_timeouts", pattern), http.ApiMetrics.MemcacheTimeouts)

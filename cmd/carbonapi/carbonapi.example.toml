@@ -25,6 +25,10 @@ host = ""
 interval = "60s"
 pattern = "{prefix}.{fqdn}"
 prefix = "carbon.api"
+# Batch buffered send
+#batchSize = 1024
+# Percentile stat metrics
+#extendedStat = true
 
 [[logger]]
 encoding = "console"

@@ -197,7 +197,7 @@ func findHandler(w http.ResponseWriter, r *http.Request) {
 		Handler:        "find",
 		Username:       username,
 		CarbonapiUUID:  uid.String(),
-		URL:            r.URL.RequestURI(),
+		URL:            r.URL.Path,
 		PeerIP:         srcIP,
 		PeerPort:       srcPort,
 		Host:           r.Host,
@@ -205,17 +205,32 @@ func findHandler(w http.ResponseWriter, r *http.Request) {
 		URI:            r.RequestURI,
 		Format:         formatRaw,
 		RequestHeaders: requestHeaders,
+		Targets:        query,
 	}
+
+	ApiMetrics.Requests.Add(1)
+	ApiMetrics.FindRequests.Add(1)
 
 	logAsError := false
 	defer func() {
 		deferredAccessLogging(accessLogger, &accessLogDetails, t0, logAsError)
+		if config.Config.Graphite.ExtendedStat {
+			if !accessLogDetails.FromCache {
+				ApiMetrics.FindRequestsTime.Add(accessLogDetails.Runtime)
+			}
+			if accessLogDetails.CarbonapiResponseSizeBytes > 0 {
+				ApiMetrics.FindRequestsSize.Add(float64(accessLogDetails.CarbonapiResponseSizeBytes))
+			}
+		}
 	}()
 
 	if !ok || !format.ValidFindFormat() {
-		http.Error(w, "unsupported format: "+formatRaw, http.StatusBadRequest)
-		accessLogDetails.HTTPCode = http.StatusBadRequest
-		accessLogDetails.Reason = "unsupported format: " + formatRaw
+		ApiMetrics.Errors.Add(1)
+		ApiMetrics.FindErrors.Add(1)
+		if config.Config.Graphite.ExtendedStat {
+			ApiMetrics.FindCounter400.Add(1)
+		}
+		setError(w, &accessLogDetails, "unsupported format", "unsupported format: "+formatRaw, http.StatusBadRequest)
 		logAsError = true
 		return
 	}
@@ -237,17 +252,25 @@ func findHandler(w http.ResponseWriter, r *http.Request) {
 	if format == protoV3Format {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			accessLogDetails.HTTPCode = http.StatusBadRequest
-			accessLogDetails.Reason = "failed to parse message body: " + err.Error()
-			http.Error(w, "bad request (failed to parse format): "+err.Error(), http.StatusBadRequest)
+			ApiMetrics.Errors.Add(1)
+			ApiMetrics.FindErrors.Add(1)
+			if config.Config.Graphite.ExtendedStat {
+				ApiMetrics.FindCounter400.Add(1)
+			}
+			setError(w, &accessLogDetails, "failed to read message body", "failed to read message body: "+err.Error(), http.StatusBadRequest)
+			logAsError = true
 			return
 		}
 
 		err = pv3Request.Unmarshal(body)
 		if err != nil {
-			accessLogDetails.HTTPCode = http.StatusBadRequest
-			accessLogDetails.Reason = "failed to parse message body: " + err.Error()
-			http.Error(w, "bad request (failed to parse format): "+err.Error(), http.StatusBadRequest)
+			ApiMetrics.Errors.Add(1)
+			ApiMetrics.FindErrors.Add(1)
+			if config.Config.Graphite.ExtendedStat {
+				ApiMetrics.FindCounter400.Add(1)
+			}
+			setError(w, &accessLogDetails, "failed to parse message body", "failed to parse message body: "+err.Error(), http.StatusBadRequest)
+			logAsError = true
 			return
 		}
 	} else {
@@ -257,9 +280,12 @@ func findHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(pv3Request.Metrics) == 0 {
-		http.Error(w, "missing parameter `query`", http.StatusBadRequest)
-		accessLogDetails.HTTPCode = http.StatusBadRequest
-		accessLogDetails.Reason = "missing parameter `query`"
+		ApiMetrics.Errors.Add(1)
+		ApiMetrics.FindErrors.Add(1)
+		if config.Config.Graphite.ExtendedStat {
+			ApiMetrics.FindCounter400.Add(1)
+		}
+		setError(w, &accessLogDetails, "missing parameter `query`", "missing parameter `query`", http.StatusBadRequest)
 		logAsError = true
 		return
 	}
@@ -271,6 +297,24 @@ func findHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		returnCode := merry.HTTPCode(err)
+
+		if config.Config.Graphite.ExtendedStat {
+			switch returnCode {
+			case http.StatusBadRequest:
+				ApiMetrics.FindCounter400.Add(1)
+			case http.StatusForbidden:
+				ApiMetrics.FindCounter403.Add(1)
+			case http.StatusInternalServerError:
+				ApiMetrics.FindCounter500.Add(1)
+			case http.StatusBadGateway:
+				ApiMetrics.FindCounter502.Add(1)
+			case http.StatusServiceUnavailable:
+				ApiMetrics.FindCounter503.Add(1)
+			case http.StatusGatewayTimeout:
+				ApiMetrics.FindCounter504.Add(1)
+			}
+		}
+
 		if returnCode != http.StatusOK || multiGlobs == nil {
 			// Allow override status code for 404-not-found replies.
 			if returnCode == http.StatusNotFound {
@@ -280,9 +324,13 @@ func findHandler(w http.ResponseWriter, r *http.Request) {
 			if returnCode < 300 {
 				multiGlobs = &pbv3.MultiGlobResponse{Metrics: []pbv3.GlobResponse{}}
 			} else {
-				http.Error(w, http.StatusText(returnCode), returnCode)
-				accessLogDetails.HTTPCode = int32(returnCode)
-				accessLogDetails.Reason = err.Error()
+				if returnCode == http.StatusForbidden {
+					setError(w, &accessLogDetails, "limits reached", err.Error(), returnCode)
+				} else if returnCode != config.Config.NotFoundStatusCode {
+					ApiMetrics.Errors.Add(1)
+					ApiMetrics.FindErrors.Add(1)
+					setError(w, &accessLogDetails, "failed to fetch data", err.Error(), returnCode)
+				}
 				// We don't want to log this as an error if it's something normal
 				// Normal is everything that is >= 500. So if config.Config.NotFoundStatusCode is 500 - this will be
 				// logged as error
@@ -361,11 +409,18 @@ func findHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		accessLogDetails.HTTPCode = http.StatusInternalServerError
-		accessLogDetails.Reason = err.Error()
+		ApiMetrics.Errors.Add(1)
+		ApiMetrics.FindErrors.Add(1)
+		if config.Config.Graphite.ExtendedStat {
+			ApiMetrics.FindCounter400.Add(1)
+		}
+		setError(w, &accessLogDetails, "internal error", err.Error(), http.StatusInternalServerError)
 		logAsError = true
 		return
+	}
+
+	if config.Config.Graphite.ExtendedStat {
+		ApiMetrics.FindCounter200.Add(1)
 	}
 
 	writeResponse(w, http.StatusOK, b, format, jsonp)

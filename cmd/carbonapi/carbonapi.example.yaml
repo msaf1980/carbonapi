@@ -89,6 +89,10 @@ graphite:
     # {prefix} will be replaced with the content of {prefix}
     # {fqdn} will be repalced with fqdn
     pattern: "{prefix}.{fqdn}"
+    # Batch buffered send
+    #batchSize: 1024
+    # Percentile stat metrics
+    #extendedStat: true
 # Maximium idle connections to carbonzipper
 idleConnections: 10
 pidFile: ""
