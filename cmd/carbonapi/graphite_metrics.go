@@ -36,13 +36,15 @@ func setupGraphiteMetrics(logger *zap.Logger) {
 		graphite := g2g.NewGraphiteBatch(host, config.Config.Graphite.Interval, 10*time.Second, config.Config.Graphite.BatchSize)
 
 		hostname, _ := os.Hostname()
-		hostname = strings.ReplaceAll(hostname, ".", "_")
+		fqdn := strings.ReplaceAll(hostname, ".", "_")
+		hostname = strings.Split(hostname, ".")[0]
 
 		prefix := config.Config.Graphite.Prefix
 
 		pattern := config.Config.Graphite.Pattern
 		pattern = strings.ReplaceAll(pattern, "{prefix}", prefix)
-		pattern = strings.ReplaceAll(pattern, "{fqdn}", hostname)
+		pattern = strings.ReplaceAll(pattern, "{fqdn}", fqdn)
+		pattern = strings.ReplaceAll(pattern, "{hostname}", hostname)
 
 		graphite.Register(fmt.Sprintf("%s.requests", pattern), http.ApiMetrics.Requests)
 		graphite.Register(fmt.Sprintf("%s.errors", pattern), http.ApiMetrics.Errors)
