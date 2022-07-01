@@ -3,10 +3,12 @@ package helper
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"testing"
 
 	"github.com/go-graphite/carbonapi/expr/tags"
 	"github.com/go-graphite/carbonapi/expr/types"
+	"github.com/go-graphite/carbonapi/pkg/parser"
 )
 
 func TestExtractTags(t *testing.T) {
@@ -173,72 +175,60 @@ func TestScaleToCommonStep(t *testing.T) {
 		commonStep int64
 		expected   []*types.MetricData
 	}{
-		// {
-		// 	"Normal metrics",
-		// 	[]*types.MetricData{
-		// 		types.MakeMetricData("metric1", []float64{1, 3, 5, 7, 9, 11, 13, 15, 17}, 1, 4), // 4..13
-		// 		types.MakeMetricData("metric2", []float64{1, 2, 3, 4, 5}, 2, 4),                 // 4..14
-		// 		types.MakeMetricData("metric3", []float64{1, 2, 3, 4, 5, 6}, 3, 3),              // 3..21
-		// 	},
-		// 	0,
-		// 	[]*types.MetricData{
-		// 		types.MakeMetricData("metric1", []float64{2, 10, 17}, 6, 0),      // 0..18
-		// 		types.MakeMetricData("metric2", []float64{1, 3, 5}, 6, 0),        // 0..18
-		// 		types.MakeMetricData("metric3", []float64{1, 2.5, 4.5, 6}, 6, 0), // 0..24
-		// 	},
-		// },
-		// {
-		// 	"xFilesFactor and custom aggregate function",
-		// 	[]*types.MetricData{
-		// 		types.MakeMetricData("metric1", []float64{NaN, 3, 5, 7, 9, 11, 13, 15, 17}, 1, 3), // 3..12
-		// 		types.MakeMetricData("metric2", []float64{1, 2, 3, 4, 5}, 2, 4),                   // 4..14
-		// 		types.MakeMetricData("metric3", []float64{1, 2, 3, 4, 5, 6}, 3, 3),                // 3..21
-		// 		types.MakeMetricData("metric6", []float64{1, 2, 3, 4, 5}, 6, 0),                   // 0..30
-		// 	},
-		// 	0,
-		// 	[]*types.MetricData{
-		// 		types.MakeMetricData("metric1", []float64{NaN, 72}, 6, 0),        // 0..12
-		// 		types.MakeMetricData("metric2", []float64{NaN, 2, NaN}, 6, 0),    // 0..18
-		// 		types.MakeMetricData("metric3", []float64{NaN, 3, 5, NaN}, 6, 0), // 0..24
-		// 		types.MakeMetricData("metric6", []float64{1, 2, 3, 4, 5}, 6, 0),  // 0..30, unchanged
-		// 	},
-		// },
-		// {
-		// 	"Custom common step",
-		// 	[]*types.MetricData{
-		// 		types.MakeMetricData("metric1", []float64{NaN, 3, 5, 7, 9, 11, 13, 15, 17}, 1, 3), // 3..12
-		// 		types.MakeMetricData("metric2", []float64{1, 2, 3, 4, 5}, 2, 4),                   // 4..14
-		// 		types.MakeMetricData("metric3", []float64{1, 2, 3, 4, 5, 6}, 3, 3),                // 3..21
-		// 		types.MakeMetricData("metric6", []float64{1, 2, 3, 4, 5}, 6, 0),                   // 0..30
-		// 	},
-		// 	12,
-		// 	[]*types.MetricData{
-		// 		types.MakeMetricData("metric1", []float64{10}, 12, 0),          // 0..12
-		// 		types.MakeMetricData("metric2", []float64{2.5, 5}, 12, 0),      // 0..18
-		// 		types.MakeMetricData("metric3", []float64{2, 5}, 12, 0),        // 0..24
-		// 		types.MakeMetricData("metric6", []float64{1.5, 3.5, 5}, 12, 0), // 0..30, unchanged
-		// 	},
-		// },
 		{
-			"Custom common step #2",
+			"Normal metrics",
 			[]*types.MetricData{
-				types.MakeMetricData("metric1", []float64{NaN, 3, 5, 7, 9, 11, 13, 15, 17}, 3, 3), // 3..12
-				types.MakeMetricData("metric2", []float64{1, 2, 3, 4, 5}, 11, 4),                  // 3..47
+				types.MakeMetricData("metric1", []float64{1, 3, 5, 7, 9, 11, 13, 15, 17}, 1, 4), // 4..13
+				types.MakeMetricData("metric2", []float64{1, 2, 3, 4, 5}, 2, 4),                 // 4..14
+				types.MakeMetricData("metric3", []float64{1, 2, 3, 4, 5, 6}, 3, 3),              // 3..21
 			},
-			11,
+			0,
 			[]*types.MetricData{
-				types.MakeMetricData("metric1", []float64{10, 1}, 11, 0),  // 0..12
-				types.MakeMetricData("metric2", []float64{2.5, 5}, 12, 0), // 0..18
+				types.MakeMetricData("metric1", []float64{2, 10, 17}, 6, 0),      // 0..18
+				types.MakeMetricData("metric2", []float64{1, 3, 5}, 6, 0),        // 0..18
+				types.MakeMetricData("metric3", []float64{1, 2.5, 4.5, 6}, 6, 0), // 0..24
+			},
+		},
+		{
+			"xFilesFactor and custom aggregate function",
+			[]*types.MetricData{
+				types.MakeMetricData("metric1", []float64{NaN, 3, 5, 7, 9, 11, 13, 15, 17}, 1, 3), // 3..12
+				types.MakeMetricData("metric2", []float64{1, 2, 3, 4, 5}, 2, 4),                   // 4..14
+				types.MakeMetricData("metric3", []float64{1, 2, 3, 4, 5, 6}, 3, 3),                // 3..21
+				types.MakeMetricData("metric6", []float64{1, 2, 3, 4, 5}, 6, 0),                   // 0..30
+			},
+			0,
+			[]*types.MetricData{
+				types.MakeMetricData("metric1", []float64{NaN, 72}, 6, 0),        // 0..12
+				types.MakeMetricData("metric2", []float64{NaN, 2, NaN}, 6, 0),    // 0..18
+				types.MakeMetricData("metric3", []float64{NaN, 3, 5, NaN}, 6, 0), // 0..24
+				types.MakeMetricData("metric6", []float64{1, 2, 3, 4, 5}, 6, 0),  // 0..30, unchanged
+			},
+		},
+		{
+			"Custom common step",
+			[]*types.MetricData{
+				types.MakeMetricData("metric1", []float64{NaN, 3, 5, 7, 9, 11, 13, 15, 17}, 1, 3), // 3..12
+				types.MakeMetricData("metric2", []float64{1, 2, 3, 4, 5}, 2, 4),                   // 4..14
+				types.MakeMetricData("metric3", []float64{1, 2, 3, 4, 5, 6}, 3, 3),                // 3..21
+				types.MakeMetricData("metric6", []float64{1, 2, 3, 4, 5}, 6, 0),                   // 0..30
+			},
+			12,
+			[]*types.MetricData{
+				types.MakeMetricData("metric1", []float64{10}, 12, 0),          // 0..12
+				types.MakeMetricData("metric2", []float64{2.5, 5}, 12, 0),      // 0..18
+				types.MakeMetricData("metric3", []float64{2, 5}, 12, 0),        // 0..24
+				types.MakeMetricData("metric6", []float64{1.5, 3.5, 5}, 12, 0), // 0..30, unchanged
 			},
 		},
 	}
-	// custom := tests[1].metrics
-	// custom[0].ConsolidationFunc = "sum"
-	// custom[1].ConsolidationFunc = "min"
-	// custom[2].ConsolidationFunc = "max"
-	// custom[0].XFilesFactor = 0.45
-	// custom[1].XFilesFactor = 0.45
-	// custom[2].XFilesFactor = 0.51
+	custom := tests[1].metrics
+	custom[0].ConsolidationFunc = "sum"
+	custom[1].ConsolidationFunc = "min"
+	custom[2].ConsolidationFunc = "max"
+	custom[0].XFilesFactor = 0.45
+	custom[1].XFilesFactor = 0.45
+	custom[2].XFilesFactor = 0.51
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ScaleToCommonStep(tt.metrics, tt.commonStep)
@@ -267,6 +257,96 @@ func TestScaleToCommonStep(t *testing.T) {
 						t.Errorf("result[%v][%v] %v != expected[%v][%v]: %v", i, v, rv, i, v, ev)
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestScaleToCommonStep0(t *testing.T) {
+	NaN := math.NaN()
+	tests := []struct {
+		name       string
+		metrics    []*types.MetricData
+		commonStep int64
+		expected   []*types.MetricData
+	}{
+		{
+			"Custom common step",
+			[]*types.MetricData{
+				types.MakeMetricData("metric1", []float64{NaN, 3, 5, 7, 9, 11, 13, 15}, 3, 3).
+					SetConsolidationFunc("sum"), // 3..27
+				types.MakeMetricData("metric2", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9}, 2, 4).
+					SetConsolidationFunc("max"), // 3..23
+				types.MakeMetricData("metric3", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9}, 2, 4).
+					SetConsolidationFunc("min"), // 3..23
+				types.MakeMetricData("metric4", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9}, 2, 4).
+					SetConsolidationFunc("avg"), // 3..23
+			},
+			0,
+			[]*types.MetricData{
+				types.MakeMetricData("metric1", []float64{math.NaN(), 8, 16, 24, 15}, 6, 0), // 0..30
+				types.MakeMetricData("metric2", []float64{1, 4, 7, 9}, 6, 0),                // 0..24
+				types.MakeMetricData("metric3", []float64{1, 2, 5, 8}, 6, 0),                // 0..24
+				types.MakeMetricData("metric3", []float64{1, 3, 6, 8.5}, 6, 0),              // 0..24
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ScaleToCommonStep(tt.metrics, tt.commonStep)
+			if len(result) != len(tt.expected) {
+				t.Errorf("Result has different length %v than expected %v", len(result), len(tt.expected))
+			}
+			for i, r := range result {
+				e := tt.expected[i]
+				if r.StartTime != e.StartTime {
+					t.Errorf("result[%v].StartTime %v != expected[%v].StartTime %v", i, r.StartTime, i, e.StartTime)
+				}
+				if r.StopTime != e.StopTime {
+					t.Errorf("result[%v].StopTime %v != expected[%v].StopTime %v", i, r.StopTime, i, e.StopTime)
+				}
+				if r.StepTime != e.StepTime {
+					t.Errorf("result[%v].StepTime %v != expected[%v].StepTime %v", i, r.StepTime, i, e.StepTime)
+				}
+				if len(r.Values) != len(e.Values) {
+					t.Fatalf("Values of result[%v] has the different length %v than expected %v\ngot %+v, want %+v", i, len(r.Values), len(e.Values), r.Values, e.Values)
+				}
+				for v, rv := range r.Values {
+					ev := e.Values[v]
+					if math.IsNaN(rv) != math.IsNaN(ev) {
+						t.Errorf("One of result[%v][%v] is NaN, but not the second: result=%v, expected=%v", i, v, rv, ev)
+					} else if !math.IsNaN(rv) && (rv != ev) {
+						t.Errorf("result[%v][%v] %v != expected[%v][%v]: %v", i, v, rv, i, v, ev)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestAggregateSeries(t *testing.T) {
+	type args struct {
+		e        parser.Expr
+		args     []*types.MetricData
+		function AggregateFunc
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []*types.MetricData
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := AggregateSeries(tt.args.e, tt.args.args, tt.args.function)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("AggregateSeries() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("AggregateSeries() = %v, want %v", got, tt.want)
 			}
 		})
 	}

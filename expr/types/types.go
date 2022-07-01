@@ -35,6 +35,11 @@ type MetricData struct {
 	AggregateFunction func([]float64) float64 `json:"-"`
 }
 
+func (m *MetricData) SetConsolidationFunc(f string) *MetricData {
+	m.ConsolidationFunc = f
+	return m
+}
+
 // MarshalCSV marshals metric data to CSV
 func MarshalCSV(results []*MetricData) []byte {
 
