@@ -269,6 +269,58 @@ func TestAverageSeries(t *testing.T) {
 			[]*types.MetricData{types.MakeMetricData("averageSeries(metric1,metric2,metric3)",
 				[]float64{2, math.NaN(), 3, 4, 5, 5.5}, 1, now32)},
 		},
+
+		// sumSeies with tags
+		{
+			"sum(seriesByTag('tag2=value*', 'name=metric'))",
+			map[parser.MetricRequest][]*types.MetricData{
+				{"seriesByTag('tag2=value*', 'name=metric')", 0, 1}: {
+					types.MakeMetricData("metric;tag1=value1;tag2=value21", []float64{1, math.NaN(), 2, 3, 4, 5}, 1, now32),
+					types.MakeMetricData("metric;tag2=value22;tag3=value3", []float64{2, math.NaN(), 3, math.NaN(), 5, 6}, 1, now32),
+					types.MakeMetricData("metric;tag2=value23;tag3=value3", []float64{3, math.NaN(), 4, 5, 6, math.NaN()}, 1, now32),
+				},
+				{"metric", 0, 1}: {types.MakeMetricData("metric", []float64{2, math.NaN(), 3, math.NaN(), 5, 11}, 1, now32)},
+			},
+			[]*types.MetricData{types.MakeMetricData("sumSeries(seriesByTag('tag2=value*', 'name=metric'))",
+				[]float64{6, math.NaN(), 9, 8, 15, 11}, 1, now32).SetTags(map[string]string{"name": "metric", "tag2": "value*"})},
+		},
+		{
+			"sum(seriesByTag('tag2=~^value.*', 'name=metric'))",
+			map[parser.MetricRequest][]*types.MetricData{
+				{"seriesByTag('tag2=~^value.*', 'name=metric')", 0, 1}: {
+					types.MakeMetricData("metric;tag1=value1;tag2=value21", []float64{1, math.NaN(), 2, 3, 4, 5}, 1, now32),
+					types.MakeMetricData("metric;tag2=value22;tag3=value3", []float64{2, math.NaN(), 3, math.NaN(), 5, 6}, 1, now32),
+					types.MakeMetricData("metric;tag2=value23;tag3=value3", []float64{3, math.NaN(), 4, 5, 6, math.NaN()}, 1, now32),
+				},
+				{"metric", 0, 1}: {types.MakeMetricData("metric", []float64{2, math.NaN(), 3, math.NaN(), 5, 11}, 1, now32)},
+			},
+			[]*types.MetricData{types.MakeMetricData("sumSeries(seriesByTag('tag2=~^value.*', 'name=metric'))",
+				[]float64{6, math.NaN(), 9, 8, 15, 11}, 1, now32).SetTags(map[string]string{"name": "metric", "tag2": "^value.*"})},
+		},
+		{
+			"sum(seriesByTag('tag2!=value21', 'name=metric'))",
+			map[parser.MetricRequest][]*types.MetricData{
+				{"seriesByTag('tag2!=value21', 'name=metric')", 0, 1}: {
+					types.MakeMetricData("metric;tag2=value22;tag3=value3", []float64{2, math.NaN(), 3, math.NaN(), 5, 6}, 1, now32),
+					types.MakeMetricData("metric;tag2=value23;tag3=value3", []float64{3, math.NaN(), 4, 5, 6, math.NaN()}, 1, now32),
+				},
+				{"metric", 0, 1}: {types.MakeMetricData("metric", []float64{2, math.NaN(), 3, math.NaN(), 5, 11}, 1, now32)},
+			},
+			[]*types.MetricData{types.MakeMetricData("sumSeries(seriesByTag('tag2!=value21', 'name=metric'))",
+				[]float64{5, math.NaN(), 7, 5, 11, 6}, 1, now32).SetTags(map[string]string{"name": "metric", "tag2": "!value21"})},
+		},
+		{
+			"sum(seriesByTag('tag2=value21'))",
+			map[parser.MetricRequest][]*types.MetricData{
+				{"seriesByTag('tag2=value21')", 0, 1}: {
+					types.MakeMetricData("metric;tag2=value22;tag3=value3", []float64{2, math.NaN(), 3, math.NaN(), 5, 6}, 1, now32),
+					types.MakeMetricData("metric;tag2=value23;tag3=value3", []float64{3, math.NaN(), 4, 5, 6, math.NaN()}, 1, now32),
+				},
+				{"metric", 0, 1}: {types.MakeMetricData("metric", []float64{2, math.NaN(), 3, math.NaN(), 5, 11}, 1, now32)},
+			},
+			[]*types.MetricData{types.MakeMetricData("sumSeries(seriesByTag('tag2=value21'))",
+				[]float64{5, math.NaN(), 7, 5, 11, 6}, 1, now32).SetTags(map[string]string{"name": "sumSeries", "tag2": "value21"})},
+		},
 	}
 
 	for _, tt := range tests {

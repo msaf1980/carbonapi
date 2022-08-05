@@ -479,7 +479,43 @@ func (r *MetricData) CopyName(name string) *MetricData {
 	}
 }
 
-// CopyName returns the copy of MetricData, Values not copied and link from parent. If name set, Name and Name tag changed, Tags wil be reset
+// CopyNameWithDefault returns the copy of MetricData, Values not copied and link from parent. Name is changed, Tags will be reset.
+// If Name tag not set, it will be set with default value.
+// Use this function in aggregate function (like sumSeries)
+func (r *MetricData) CopyNameWithDefault(name string, defaultName string) *MetricData {
+	if name == "" {
+		name = defaultName
+	}
+
+	tags := tags.ExtractTags(ExtractName(name))
+	if _, exist := tags["name"]; !exist {
+		tags["name"] = defaultName
+	}
+
+	return &MetricData{
+		FetchResponse: pb.FetchResponse{
+			Name:                    name,
+			PathExpression:          r.PathExpression,
+			ConsolidationFunc:       r.ConsolidationFunc,
+			StartTime:               r.StartTime,
+			StopTime:                r.StopTime,
+			StepTime:                r.StepTime,
+			XFilesFactor:            r.XFilesFactor,
+			HighPrecisionTimestamps: r.HighPrecisionTimestamps,
+			Values:                  r.Values,
+			AppliedFunctions:        r.AppliedFunctions,
+			RequestStartTime:        r.RequestStartTime,
+			RequestStopTime:         r.RequestStopTime,
+		},
+		GraphOptions:      r.GraphOptions,
+		ValuesPerPoint:    r.ValuesPerPoint,
+		aggregatedValues:  r.aggregatedValues,
+		Tags:              tags,
+		AggregateFunction: r.AggregateFunction,
+	}
+}
+
+// CopyTag returns the copy of MetricData, Values not copied and link from parent. If name set, Name and Name tag changed, Tags will be reset
 func (r *MetricData) CopyTag(name string, tags map[string]string) *MetricData {
 	if name == "" {
 		return r.CopyLink()
@@ -584,6 +620,12 @@ func (r *MetricData) FixNameTag() *MetricData {
 // SetTag allow to set custom tag (for tests)
 func (r *MetricData) SetTag(key, value string) *MetricData {
 	r.Tags[key] = value
+	return r
+}
+
+// SetTag allow to set tags
+func (r *MetricData) SetTags(tags map[string]string) *MetricData {
+	r.Tags = tags
 	return r
 }
 

@@ -65,6 +65,33 @@ func TestExtractTags(t *testing.T) {
 				"name": "metric",
 			},
 		},
+		// from aggregation functions with seriesByTag
+		{
+			TestName: "seriesByTag('tag2=value*', 'name=metric')",
+			Input:    "seriesByTag('tag2=value*', 'name=metric')",
+			Output:   map[string]string{"name": "metric", "tag2": "value*"},
+		},
+		{
+			TestName: "seriesByTag('tag2=~^value.*', 'name=metric')",
+			Input:    "seriesByTag('tag2=~^value.*', 'name=metric')",
+			Output:   map[string]string{"name": "metric", "tag2": "^value.*"},
+		},
+		{
+			TestName: "seriesByTag('tag2!=value21', 'name=metric')",
+			Input:    "seriesByTag('tag2!=value21', 'name=metric')",
+			Output:   map[string]string{"name": "metric", "tag2": "!value21"},
+		},
+		{
+			TestName: "seriesByTag('tag2=value21')",
+			Input:    "seriesByTag('tag2=value21')",
+			Output:   map[string]string{"tag2": "value21"},
+		},
+		// brokken, from aggregation functions with seriesByTag
+		{
+			TestName: "seriesByTag('tag2=', 'name=metric')",
+			Input:    "seriesByTag('tag2=', 'tag3', 'name=metric')",
+			Output:   map[string]string{"name": "metric"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -72,7 +99,7 @@ func TestExtractTags(t *testing.T) {
 			res := ExtractTags(tt.Input)
 
 			if len(res) != len(tt.Output) {
-				t.Fatalf("result length mismatch, got %v, expected %v", len(res), len(tt.Output))
+				t.Fatalf("result length mismatch, got %v, expected %v, %+v != %+v", len(res), len(tt.Output), res, tt.Output)
 			}
 
 			for k, v := range res {

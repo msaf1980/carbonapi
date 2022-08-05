@@ -181,7 +181,7 @@ func AggregateSeries(e parser.Expr, args []*types.MetricData, function Aggregate
 	args = ScaleSeries(args)
 
 	length := len(args[0].Values)
-	r := args[0].CopyName(e.Target() + "(" + e.RawArgs() + ")")
+	r := args[0].CopyNameWithDefault(e.Target()+"("+e.RawArgs()+")", e.Target())
 	r.Values = make([]float64, length)
 
 	values := make([]float64, len(args))
