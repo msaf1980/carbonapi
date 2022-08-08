@@ -161,8 +161,7 @@ func ForEachSeriesDo(ctx context.Context, e parser.Expr, from, until int64, valu
 	var results []*types.MetricData
 
 	for _, a := range arg {
-		r := a.CopyLinkTags()
-		r.Name = e.Target() + "(" + a.Name + ")"
+		r := a.CopyTag(e.Target()+"("+a.Name+")", a.Tags)
 		r.Values = make([]float64, len(a.Values))
 		results = append(results, function(a, r))
 	}

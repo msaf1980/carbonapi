@@ -515,7 +515,8 @@ func (r *MetricData) CopyNameWithDefault(name string, defaultName string) *Metri
 	}
 }
 
-// CopyTag returns the copy of MetricData, Values not copied and link from parent. If name set, Name and Name tag changed, Tags will be reset
+// CopyTag returns the copy of MetricData, Values not copied and link from parent. If name set, Name and Name tag changed, Tags will be reset.
+// WARNING: can provide inconsistence beetween name and tags, if incorectly used
 func (r *MetricData) CopyTag(name string, tags map[string]string) *MetricData {
 	if name == "" {
 		return r.CopyLink()
@@ -677,7 +678,7 @@ func CopyMetricDataSliceWithTags(args []*MetricData, name string, tags map[strin
 
 // MakeMetricData creates new metrics data with given metric timeseries
 func MakeMetricData(name string, values []float64, step, start int64) *MetricData {
-	tags := tags.ExtractTags(name)
+	tags := tags.ExtractTags(ExtractName(name))
 	return makeMetricDataWithTags(name, values, step, start, tags).FixNameTag()
 }
 
