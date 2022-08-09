@@ -282,7 +282,7 @@ func TestAverageSeries(t *testing.T) {
 				{"metric", 0, 1}: {types.MakeMetricData("metric", []float64{2, math.NaN(), 3, math.NaN(), 5, 11}, 1, now32)},
 			},
 			[]*types.MetricData{types.MakeMetricData("sumSeries(seriesByTag('tag2=value*', 'name=metric'))",
-				[]float64{6, math.NaN(), 9, 8, 15, 11}, 1, now32).SetTags(map[string]string{"name": "metric", "tag2": "value*"})},
+				[]float64{6, math.NaN(), 9, 8, 15, 11}, 1, now32).SetTags(map[string]string{"name": "metric", "tag2": "value__"})},
 		},
 		{
 			"sum(seriesByTag('tag2=~^value.*', 'name=metric'))",
@@ -295,7 +295,7 @@ func TestAverageSeries(t *testing.T) {
 				{"metric", 0, 1}: {types.MakeMetricData("metric", []float64{2, math.NaN(), 3, math.NaN(), 5, 11}, 1, now32)},
 			},
 			[]*types.MetricData{types.MakeMetricData("sumSeries(seriesByTag('tag2=~^value.*', 'name=metric'))",
-				[]float64{6, math.NaN(), 9, 8, 15, 11}, 1, now32).SetTags(map[string]string{"name": "metric", "tag2": "^value.*"})},
+				[]float64{6, math.NaN(), 9, 8, 15, 11}, 1, now32).SetTags(map[string]string{"name": "metric", "tag2": "__value____"})},
 		},
 		{
 			"sum(seriesByTag('tag2!=value21', 'name=metric'))",

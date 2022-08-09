@@ -2,6 +2,8 @@ package tags
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type extractTagTestCase struct {
@@ -69,12 +71,12 @@ func TestExtractTags(t *testing.T) {
 		{
 			TestName: "seriesByTag('tag2=value*', 'name=metric')",
 			Input:    "seriesByTag('tag2=value*', 'name=metric')",
-			Output:   map[string]string{"name": "metric", "tag2": "value*"},
+			Output:   map[string]string{"name": "metric", "tag2": "value__"},
 		},
 		{
 			TestName: "seriesByTag('tag2=~^value.*', 'name=metric')",
 			Input:    "seriesByTag('tag2=~^value.*', 'name=metric')",
-			Output:   map[string]string{"name": "metric", "tag2": "^value.*"},
+			Output:   map[string]string{"name": "metric", "tag2": "__value____"},
 		},
 		{
 			TestName: "seriesByTag('tag2!=value21', 'name=metric')",
@@ -110,6 +112,44 @@ func TestExtractTags(t *testing.T) {
 				} else {
 					t.Fatalf("got unexpected key %v=%v in result", k, v)
 				}
+			}
+		})
+	}
+}
+
+func TestReplaceSpecSymbols(t *testing.T) {
+	tests := []struct {
+		Input  string
+		Output string
+	}{
+		{
+			Input:  "_all__symbols__a-z____-___a_b___not_replaced_",
+			Output: "_all__symbols__a-z____-___a_b___not_replaced_",
+		},
+		{
+			Input:  "^some_symbols_[a-z]+.?-.*{a,b}?_are_replaced$",
+			Output: "__some_symbols___a-z________-______a__b_____are_replaced__",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.Input, func(t *testing.T) {
+			out := replaceSpecSymbols(tt.Input)
+			assert.Equal(t, tt.Output, out)
+		})
+	}
+}
+
+func BenchmarkReplaceSpecSymbols(b *testing.B) {
+	benchmarks := []string{
+		"_all__symbols__a-z____-___a_b___not_replaced_",
+		"^some_symbols_[a-z]+.?-.*{a,b}?_are_replaced$",
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				s := replaceSpecSymbols(bm)
+				_ = s
 			}
 		})
 	}

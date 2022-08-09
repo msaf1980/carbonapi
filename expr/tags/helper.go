@@ -13,6 +13,19 @@ const (
 	WantDelim
 )
 
+func replaceSpecSymbols(s string) string {
+	var result strings.Builder
+	result.Grow(len(s) + 20)
+	for _, c := range s {
+		if c == ',' || c == '.' || c == '?' || c == '*' || c == '+' || c == '^' || c == '$' || c == '[' || c == ']' || c == '{' || c == '}' {
+			result.WriteString("__")
+		} else {
+			result.WriteRune(c)
+		}
+	}
+	return result.String()
+}
+
 // parse seriesByTag args
 func ParseTags(s string) map[string]string {
 	if s == "" {
@@ -77,10 +90,11 @@ LOOP:
 				startVal = i
 				end := strings.IndexByte(s[startVal:], '\'')
 				if tag != "" && end > 0 {
+					v := replaceSpecSymbols(s[startVal : startVal+end])
 					if notEq {
-						tags[tag] = "!" + s[startVal:startVal+end]
+						tags[tag] = "!" + v
 					} else {
-						tags[tag] = s[startVal : startVal+end]
+						tags[tag] = v
 					}
 				}
 				step = WantDelim
