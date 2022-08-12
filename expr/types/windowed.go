@@ -21,6 +21,11 @@ type Windowed struct {
 	nans   int
 }
 
+func NewWindowed(windowSize int) *Windowed {
+	// TODO (msaf1980): may be modify logic and init Data values with Nan for simplify moving functions ?
+	return &Windowed{Data: make([]float64, windowSize)}
+}
+
 func (w *Windowed) Reset() {
 	w.length = 0
 	w.head = 0

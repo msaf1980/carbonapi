@@ -137,7 +137,7 @@ func (f *moving) Do(ctx context.Context, e parser.Expr, from, until int64, value
 			r.StartTime = (from + r.StepTime - 1) / r.StepTime * r.StepTime // align StartTime to closest >= StepTime
 			r.StopTime = r.StartTime + int64(len(r.Values))*r.StepTime
 
-			w := &types.Windowed{Data: make([]float64, windowSize)}
+			w := types.NewWindowed(windowSize)
 			for i, v := range a.Values {
 				if ridx := i - offset; ridx >= 0 {
 					if i < windowSize {
