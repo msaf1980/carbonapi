@@ -413,9 +413,9 @@ func TestEvalExprModifiedOrigin(t *testing.T, tt *EvalTestItem, from, until int6
 				t.Errorf("metric[%d] %+v with name %v doesn't contain '%s' tag", i, actual, actual.Name, k)
 			}
 		}
-		for k := range actual.Tags {
+		for k, v := range actual.Tags {
 			if _, ok := want.Tags[k]; !ok {
-				t.Errorf("metric[%d] %+v with name %v contain unwanted '%s' tag", i, actual, actual.Name, k)
+				t.Errorf("metric[%d] %+v with name %v contain unwanted '%s=%s' tag", i, actual, actual.Name, k, v)
 			}
 		}
 		if actual.StepTime == 0 {

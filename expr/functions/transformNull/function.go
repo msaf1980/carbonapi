@@ -51,10 +51,7 @@ func (f *transformNull) Do(ctx context.Context, e parser.Expr, from, until int64
 	if !ok {
 		ok = e.ArgsLen() > 1
 	}
-	var defvStr string
-	if defv != 0 {
-		defvStr = strconv.FormatFloat(defv, 'g', -1, 64)
-	}
+	defvStr := strconv.FormatFloat(defv, 'g', -1, 64)
 
 	var valMap []bool
 	referenceSeriesExpr := e.GetNamedArg("referenceSeries")
@@ -91,9 +88,10 @@ func (f *transformNull) Do(ctx context.Context, e parser.Expr, from, until int64
 			name = "transformNull(" + a.Name + ")"
 		}
 
-		r := a.CopyName(name)
-		r.Values = make([]float64, len(a.Values))
+		r := a.CopyLink()
+		r.Name = name
 		r.Tags["transformNull"] = defvStr
+		r.Values = make([]float64, len(a.Values))
 
 		for i, v := range a.Values {
 			if math.IsNaN(v) {
