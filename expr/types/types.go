@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"errors"
+	"io"
 	"math"
 	"sort"
 	"strconv"
@@ -80,6 +81,54 @@ func MarshalCSV(results []*MetricData) []byte {
 		}
 	}
 	return b
+}
+
+// MarshalCSVW marshals metric data to CSV
+func MarshalCSVW(w io.Writer, results []*MetricData) (written int64, err error) {
+	var n int
+	if len(results) == 0 {
+		n, err = io.WriteString(w, "[]")
+		return int64(n), err
+	}
+	n = len(results[0].Name) + len(results[0].PathExpression) + 128*len(results[0].Values) + 128
+	b := make([]byte, 0, n)
+
+	for _, r := range results {
+
+		step := r.StepTime
+		t := r.StartTime
+		for _, v := range r.Values {
+			b = append(b, '"')
+			b = append(b, r.Name...)
+			b = append(b, `",`...)
+			tm := time.Unix(t, 0).UTC()
+			b = strconv.AppendInt(b, int64(tm.Year()), 10)
+			b = append(b, '-')
+			b = appendInt2(b, int64(tm.Month()))
+			b = append(b, '-')
+			b = appendInt2(b, int64(tm.Day()))
+			b = append(b, ' ')
+			b = appendInt2(b, int64(tm.Hour()))
+			b = append(b, ':')
+			b = appendInt2(b, int64(tm.Minute()))
+			b = append(b, ':')
+			b = appendInt2(b, int64(tm.Second()))
+			b = append(b, ',')
+			if !math.IsNaN(v) {
+				b = strconv.AppendFloat(b, v, 'f', -1, 64)
+			}
+			b = append(b, '\n')
+
+			if n, err = w.Write(b); err != nil {
+				return
+			}
+			written += int64(n)
+			b = b[:0]
+
+			t += step
+		}
+	}
+	return
 }
 
 // ConsolidateJSON consolidates values to maxDataPoints size
@@ -193,6 +242,97 @@ func MarshalJSON(results []*MetricData, timestampMultiplier int64, noNullPoints 
 	b = append(b, ']')
 
 	return b
+}
+
+// MarshalJSON marshals metric data to JSON
+func MarshalJSONW(w io.Writer, results []*MetricData, timestampMultiplier int64, noNullPoints bool) (written int64, err error) {
+	var n int
+	if len(results) == 0 {
+		n, err = io.WriteString(w, "[]")
+		return int64(n), err
+	}
+	n = len(results[0].Name) + len(results[0].PathExpression) + 128*len(results[0].Values) + 128
+	b := make([]byte, 0, n)
+	b = append(b, '[')
+
+	var topComma bool
+	for _, r := range results {
+		if r == nil {
+			continue
+		}
+
+		if topComma {
+			b = append(b, ',')
+		}
+		topComma = true
+
+		b = append(b, `{"target":`...)
+		b = strconv.AppendQuoteToASCII(b, r.Name)
+		b = append(b, `,"datapoints":[`...)
+
+		var innerComma bool
+		t := r.StartTime * timestampMultiplier
+		for _, v := range r.AggregatedValues() {
+			if noNullPoints && math.IsNaN(v) {
+				t += r.AggregatedTimeStep() * timestampMultiplier
+			} else {
+				if innerComma {
+					b = append(b, ',')
+				}
+				innerComma = true
+
+				b = append(b, '[')
+
+				if math.IsNaN(v) || math.IsInf(v, 1) || math.IsInf(v, -1) {
+					b = append(b, "null"...)
+				} else {
+					b = strconv.AppendFloat(b, v, 'f', -1, 64)
+				}
+
+				b = append(b, ',')
+
+				b = strconv.AppendInt(b, t, 10)
+
+				b = append(b, ']')
+
+				t += r.AggregatedTimeStep() * timestampMultiplier
+			}
+		}
+
+		b = append(b, `],"tags":{`...)
+		notFirstTag := false
+		responseTags := make([]string, 0, len(r.Tags))
+		for tag := range r.Tags {
+			responseTags = append(responseTags, tag)
+		}
+		sort.Strings(responseTags)
+		for _, tag := range responseTags {
+			v := r.Tags[tag]
+			if notFirstTag {
+				b = append(b, ',')
+			}
+			b = strconv.AppendQuoteToASCII(b, tag)
+			b = append(b, ':')
+			b = strconv.AppendQuoteToASCII(b, v)
+			notFirstTag = true
+		}
+
+		b = append(b, `}}`...)
+
+		if n, err = w.Write(b); err != nil {
+			return
+		}
+		written += int64(n)
+		b = b[:0]
+	}
+
+	b = append(b, ']')
+	if n, err = w.Write(b); err != nil {
+		return
+	}
+	written += int64(n)
+
+	return
 }
 
 // MarshalPickle marshals metric data to pickle format
@@ -313,6 +453,52 @@ func MarshalRaw(results []*MetricData) []byte {
 		b = append(b, '\n')
 	}
 	return b
+}
+
+// MarshalRaw marshals metric data to graphite's internal format, called 'raw'
+func MarshalRawW(w io.Writer, results []*MetricData) (written int64, err error) {
+	var n int
+	if len(results) == 0 {
+		n, err = io.WriteString(w, "[]")
+		return int64(n), err
+	}
+	n = len(results[0].Name) + len(results[0].PathExpression) + 128*len(results[0].Values) + 128
+	b := make([]byte, 0, n)
+
+	for _, r := range results {
+
+		b = append(b, r.Name...)
+
+		b = append(b, ',')
+		b = strconv.AppendInt(b, r.StartTime, 10)
+		b = append(b, ',')
+		b = strconv.AppendInt(b, r.StopTime, 10)
+		b = append(b, ',')
+		b = strconv.AppendInt(b, r.StepTime, 10)
+		b = append(b, '|')
+
+		var comma bool
+		for _, v := range r.Values {
+			if comma {
+				b = append(b, ',')
+			}
+			comma = true
+			if math.IsNaN(v) {
+				b = append(b, "None"...)
+			} else {
+				b = strconv.AppendFloat(b, v, 'f', -1, 64)
+			}
+		}
+
+		b = append(b, '\n')
+
+		if n, err = w.Write(b); err != nil {
+			return
+		}
+		written += int64(n)
+		b = b[:0]
+	}
+	return
 }
 
 // SetValuesPerPoint sets value per point coefficient.

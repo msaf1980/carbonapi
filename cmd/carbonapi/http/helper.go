@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-graphite/carbonapi/carbonapipb"
 	"github.com/go-graphite/carbonapi/cmd/carbonapi/config"
+	"github.com/go-graphite/carbonapi/expr/types"
 	"github.com/go-graphite/carbonapi/pkg/parser"
 	"github.com/lomik/zapwriter"
 	"go.uber.org/zap"
@@ -191,6 +192,54 @@ func writeResponse(w http.ResponseWriter, returnCode int, b []byte, format respo
 		_, _ = w.Write(b)
 	}
 }
+
+func writeResponseJSON(w http.ResponseWriter, returnCode int, results []*types.MetricData, timestampMultiplier int64, noNullPoints bool, jsonp, carbonapiUUID string) (written int64, err error) {
+	w.Header().Set(ctxHeaderUUID, carbonapiUUID)
+	if jsonp != "" {
+		w.Header().Set("Content-Type", contentTypeJavaScript)
+		w.WriteHeader(returnCode)
+		_, _ = w.Write([]byte(jsonp))
+		_, _ = w.Write([]byte{'('})
+		written, err = types.MarshalJSONW(w, results, 1.0, false)
+		_, _ = w.Write([]byte{')'})
+		return
+	} else {
+		w.Header().Set("Content-Type", contentTypeJSON)
+		w.WriteHeader(returnCode)
+		return types.MarshalJSONW(w, results, 1.0, false)
+	}
+}
+
+func writeResponseRaw(w http.ResponseWriter, returnCode int, results []*types.MetricData, carbonapiUUID string) (written int64, err error) {
+	w.Header().Set(ctxHeaderUUID, carbonapiUUID)
+	w.Header().Set("Content-Type", contentTypeRaw)
+	w.WriteHeader(returnCode)
+	return types.MarshalRawW(w, results)
+}
+
+func writeResponseCSV(w http.ResponseWriter, returnCode int, results []*types.MetricData, carbonapiUUID string) (written int64, err error) {
+	w.Header().Set(ctxHeaderUUID, carbonapiUUID)
+	w.Header().Set("Content-Type", contentTypeCSV)
+	w.WriteHeader(returnCode)
+	return types.MarshalCSVW(w, results)
+}
+
+// case protoV2Format, protoV3Format:
+// 	w.Header().Set("Content-Type", contentTypeProtobuf)
+// 	w.WriteHeader(returnCode)
+// 	_, _ = w.Write(b)
+// case pickleFormat:
+// 	w.Header().Set("Content-Type", contentTypePickle)
+// 	w.WriteHeader(returnCode)
+// 	_, _ = w.Write(b)
+// case pngFormat:
+// 	w.Header().Set("Content-Type", contentTypePNG)
+// 	w.WriteHeader(returnCode)
+// 	_, _ = w.Write(b)
+// case svgFormat:
+// 	w.Header().Set("Content-Type", contentTypeSVG)
+// 	w.WriteHeader(returnCode)
+// 	_, _ = w.Write(b)
 
 func bucketRequestTimes(req *http.Request, t time.Duration) {
 	ms := t.Nanoseconds() / int64(time.Millisecond)

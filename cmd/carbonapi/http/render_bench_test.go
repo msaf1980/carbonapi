@@ -61,6 +61,62 @@ func BenchmarkMarshalJSONLong(b *testing.B) {
 	}
 }
 
+func BenchmarkMarshalJSONW(b *testing.B) {
+	data := []*types.MetricData{
+		types.MakeMetricData("metric1", tests.GetData(10000), 100, 100),
+		types.MakeMetricData("metric2", tests.GetData(100000), 100, 100),
+	}
+
+	w := httptest.NewRecorder()
+	w.Body.Grow(8196)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.Body.Reset()
+		_, err := writeResponseJSON(w, http.StatusOK, data, 1.0, false, "", "UUID")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkMarshalJSONWLong(b *testing.B) {
+	data := []*types.MetricData{
+		types.MakeMetricData("metric1", tests.GetData(10000), 100, 100),
+		types.MakeMetricData("metric2", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric3", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric4", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric5", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric6", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric7", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric8", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric9", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric10", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric11", tests.GetData(10000), 100, 100),
+		types.MakeMetricData("metric12", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric13", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric14", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric15", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric16", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric17", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric18", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric19", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric20", tests.GetData(100000), 100, 100),
+	}
+
+	w := httptest.NewRecorder()
+	w.Body.Grow(8196)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.Body.Reset()
+		_, err := types.MarshalJSONW(w, data, 1.0, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkMarshalRaw(b *testing.B) {
 	data := []*types.MetricData{
 		types.MakeMetricData("metric1", tests.GetData(10000), 100, 100),
@@ -113,6 +169,62 @@ func BenchmarkMarshalRawLong(b *testing.B) {
 	}
 }
 
+func BenchmarkMarshalRawW(b *testing.B) {
+	data := []*types.MetricData{
+		types.MakeMetricData("metric1", tests.GetData(10000), 100, 100),
+		types.MakeMetricData("metric2", tests.GetData(100000), 100, 100),
+	}
+
+	w := httptest.NewRecorder()
+	w.Body.Grow(8196)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.Body.Reset()
+		_, err := writeResponseRaw(w, http.StatusOK, data, "UUID")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkMarshalRawWLong(b *testing.B) {
+	data := []*types.MetricData{
+		types.MakeMetricData("metric1", tests.GetData(10000), 100, 100),
+		types.MakeMetricData("metric2", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric3", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric4", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric5", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric6", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric7", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric8", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric9", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric10", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric11", tests.GetData(10000), 100, 100),
+		types.MakeMetricData("metric12", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric13", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric14", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric15", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric16", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric17", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric18", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric19", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric20", tests.GetData(100000), 100, 100),
+	}
+
+	w := httptest.NewRecorder()
+	w.Body.Grow(8196)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.Body.Reset()
+		_, err := writeResponseRaw(w, http.StatusOK, data, "UUID")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkMarshalCSV(b *testing.B) {
 	data := []*types.MetricData{
 		types.MakeMetricData("metric1", tests.GetData(10000), 100, 100),
@@ -162,6 +274,62 @@ func BenchmarkMarshalCSVLong(b *testing.B) {
 		w.Body.Reset()
 		body := types.MarshalCSV(data)
 		writeResponse(w, http.StatusOK, body, jsonFormat, "", "UUID")
+	}
+}
+
+func BenchmarkMarshalCSVW(b *testing.B) {
+	data := []*types.MetricData{
+		types.MakeMetricData("metric1", tests.GetData(10000), 100, 100),
+		types.MakeMetricData("metric2", tests.GetData(100000), 100, 100),
+	}
+
+	w := httptest.NewRecorder()
+	w.Body.Grow(8196)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.Body.Reset()
+		_, err := writeResponseCSV(w, http.StatusOK, data, "UUID")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkMarshalCSVWLong(b *testing.B) {
+	data := []*types.MetricData{
+		types.MakeMetricData("metric1", tests.GetData(10000), 100, 100),
+		types.MakeMetricData("metric2", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric3", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric4", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric5", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric6", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric7", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric8", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric9", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric10", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric11", tests.GetData(10000), 100, 100),
+		types.MakeMetricData("metric12", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric13", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric14", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric15", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric16", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric17", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric18", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric19", tests.GetData(100000), 100, 100),
+		types.MakeMetricData("metric20", tests.GetData(100000), 100, 100),
+	}
+
+	w := httptest.NewRecorder()
+	w.Body.Grow(8196)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.Body.Reset()
+		_, err := writeResponseCSV(w, http.StatusOK, data, "UUID")
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -325,10 +493,9 @@ func BenchmarkMarshalProtobufV3Long(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		w.Body.Reset()
-		body, err := types.MarshalProtobufV3(data)
+		_, err := writeResponseJSON(w, http.StatusOK, data, 1.0, false, "", "UUID")
 		if err != nil {
 			b.Fatal(err)
 		}
-		writeResponse(w, http.StatusOK, body, jsonFormat, "", "UUID")
 	}
 }

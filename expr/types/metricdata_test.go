@@ -21,10 +21,18 @@ func TestJSONResponse(t *testing.T) {
 		},
 	}
 
+	var w bytes.Buffer
+
 	for _, tt := range tests {
 		b := MarshalJSON(tt.results, 1.0, false)
 		if !bytes.Equal(b, tt.out) {
-			t.Errorf("marshalJSON(%+v): got\n%+v\nwant\n%+v", tt.results, string(b), string(tt.out))
+			t.Errorf("marshalJSON(%+v): got\n%s\nwant\n%s", tt.results, string(b), string(tt.out))
+		}
+		w.Reset()
+		if _, err := MarshalJSONW(&w, tt.results, 1.0, false); err != nil {
+			t.Errorf("marshalJSONW(%+v) error %+v", tt.results, err)
+		} else if !bytes.Equal(w.Bytes(), tt.out) {
+			t.Errorf("marshalJSONW(%+v): got\n%s\nwant\n%s", tt.results, w.String(), string(tt.out))
 		}
 	}
 }
@@ -46,10 +54,18 @@ func TestJSONResponseNoNullPoints(t *testing.T) {
 		},
 	}
 
+	var w bytes.Buffer
+
 	for _, tt := range tests {
 		b := MarshalJSON(tt.results, 1.0, true)
 		if !bytes.Equal(b, tt.out) {
 			t.Errorf("marshalJSON(%+v): got\n%+v\nwant\n%+v", tt.results, string(b), string(tt.out))
+		}
+		w.Reset()
+		if _, err := MarshalJSONW(&w, tt.results, 1.0, true); err != nil {
+			t.Errorf("marshalJSONW(%+v) error %+v", tt.results, err)
+		} else if !bytes.Equal(w.Bytes(), tt.out) {
+			t.Errorf("marshalJSONW(%+v): got\n%s\nwant\n%s", tt.results, w.String(), string(tt.out))
 		}
 	}
 }
@@ -69,10 +85,18 @@ func TestRawResponse(t *testing.T) {
 		},
 	}
 
+	var w bytes.Buffer
+
 	for _, tt := range tests {
 		b := MarshalRaw(tt.results)
 		if !bytes.Equal(b, tt.out) {
-			t.Errorf("marshalRaw(%+v): got\n%+v\nwant\n%+v", tt.results, string(b), string(tt.out))
+			t.Errorf("marshalRaw(%+v): got\n%s\nwant\n%s", tt.results, string(b), string(tt.out))
+		}
+		w.Reset()
+		if _, err := MarshalRawW(&w, tt.results); err != nil {
+			t.Errorf("marshalRawW(%+v) error %+v", tt.results, err)
+		} else if !bytes.Equal(w.Bytes(), tt.out) {
+			t.Errorf("marshalRawW(%+v): got\n%s\nwant\n%s", tt.results, w.String(), string(tt.out))
 		}
 	}
 }
@@ -101,10 +125,18 @@ func TestCSVResponse(t *testing.T) {
 		},
 	}
 
+	var w bytes.Buffer
+
 	for _, tt := range tests {
 		b := MarshalCSV(tt.results)
 		if !bytes.Equal(b, tt.out) {
 			t.Errorf("marshalCSV(%+v): \n%+v\nwant\n%+v", tt.results, string(b), string(tt.out))
+		}
+		w.Reset()
+		if _, err := MarshalCSVW(&w, tt.results); err != nil {
+			t.Errorf("marshalCSVW(%+v) error %+v", tt.results, err)
+		} else if !bytes.Equal(w.Bytes(), tt.out) {
+			t.Errorf("marshalCSVW(%+v): got\n%s\nwant\n%s", tt.results, w.String(), string(tt.out))
 		}
 	}
 }
