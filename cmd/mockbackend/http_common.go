@@ -7,6 +7,7 @@ import (
 )
 
 type Response struct {
+	HttpCode       int      `yaml:"httpCode"` // return error if one of expresssions not success
 	ReplyDelayMS   int      `yaml:"replyDelayMS"`
 	PathExpression string   `yaml:"pathExpression"`
 	Data           []Metric `yaml:"data"`
@@ -86,6 +87,7 @@ func copyResponse(src Response) Response {
 	dst := Response{
 		PathExpression: src.PathExpression,
 		ReplyDelayMS:   src.ReplyDelayMS,
+		HttpCode:       src.HttpCode,
 		Data:           make([]Metric, len(src.Data)),
 	}
 

@@ -97,66 +97,82 @@ func (cfg *listener) renderHandler(wr http.ResponseWriter, req *http.Request) {
 		Expressions: copyMap(cfg.Expressions),
 	}
 
+	returnCode := http.StatusOK
+
 	for _, target := range targets {
-		response, ok := newCfg.Expressions[target]
-		if !ok {
-			wr.WriteHeader(http.StatusNotFound)
-			_, _ = wr.Write([]byte("Not found"))
-			return
-		}
-		if response.ReplyDelayMS > 0 {
-			delay := time.Duration(response.ReplyDelayMS) * time.Millisecond
-			logger.Info("will add extra delay",
-				zap.Duration("delay", delay),
-			)
-			time.Sleep(delay)
-		}
-		for _, m := range response.Data {
-			step := m.Step
-			if step == 0 {
-				step = 1
+		if response, ok := newCfg.Expressions[target]; ok {
+			if response.ReplyDelayMS > 0 {
+				delay := time.Duration(response.ReplyDelayMS) * time.Millisecond
+				logger.Info("will add extra delay",
+					zap.Duration("delay", delay),
+				)
+				time.Sleep(delay)
 			}
-			startTime := m.StartTime
-			if startTime == 0 {
-				startTime = step
+
+			if response.HttpCode == http.StatusNotFound {
+				continue
 			}
-			isAbsent := make([]bool, 0, len(m.Values))
-			protov2Values := make([]float64, 0, len(m.Values))
-			for i := range m.Values {
-				if math.IsNaN(m.Values[i]) {
-					isAbsent = append(isAbsent, true)
-					protov2Values = append(protov2Values, 0.0)
-				} else {
-					isAbsent = append(isAbsent, false)
-					protov2Values = append(protov2Values, m.Values[i])
+
+			if response.HttpCode != 0 && response.HttpCode != http.StatusOK {
+				http.Error(wr, http.StatusText(response.HttpCode), response.HttpCode)
+				return
+			}
+
+			returnCode = http.StatusOK
+
+			for _, m := range response.Data {
+				step := m.Step
+				if step == 0 {
+					step = 1
 				}
-			}
-			fr2 := carbonapi_v2_pb.FetchResponse{
-				Name:      m.MetricName,
-				StartTime: int32(startTime),
-				StopTime:  int32(startTime + step*len(protov2Values)),
-				StepTime:  int32(step),
-				Values:    protov2Values,
-				IsAbsent:  isAbsent,
-			}
+				startTime := m.StartTime
+				if startTime == 0 {
+					startTime = step
+				}
+				isAbsent := make([]bool, 0, len(m.Values))
+				protov2Values := make([]float64, 0, len(m.Values))
+				for i := range m.Values {
+					if math.IsNaN(m.Values[i]) {
+						isAbsent = append(isAbsent, true)
+						protov2Values = append(protov2Values, 0.0)
+					} else {
+						isAbsent = append(isAbsent, false)
+						protov2Values = append(protov2Values, m.Values[i])
+					}
+				}
+				fr2 := carbonapi_v2_pb.FetchResponse{
+					Name:      m.MetricName,
+					StartTime: int32(startTime),
+					StopTime:  int32(startTime + step*len(protov2Values)),
+					StepTime:  int32(step),
+					Values:    protov2Values,
+					IsAbsent:  isAbsent,
+				}
 
-			fr3 := carbonapi_v3_pb.FetchResponse{
-				Name:                    m.MetricName,
-				PathExpression:          target,
-				ConsolidationFunc:       "avg",
-				StartTime:               int64(startTime),
-				StopTime:                int64(startTime + step*len(m.Values)),
-				StepTime:                int64(step),
-				XFilesFactor:            0,
-				HighPrecisionTimestamps: false,
-				Values:                  m.Values,
-				RequestStartTime:        1,
-				RequestStopTime:         int64(startTime + step*len(m.Values)),
-			}
+				fr3 := carbonapi_v3_pb.FetchResponse{
+					Name:                    m.MetricName,
+					PathExpression:          target,
+					ConsolidationFunc:       "avg",
+					StartTime:               int64(startTime),
+					StopTime:                int64(startTime + step*len(m.Values)),
+					StepTime:                int64(step),
+					XFilesFactor:            0,
+					HighPrecisionTimestamps: false,
+					Values:                  m.Values,
+					RequestStartTime:        1,
+					RequestStopTime:         int64(startTime + step*len(m.Values)),
+				}
 
-			multiv2.Metrics = append(multiv2.Metrics, fr2)
-			multiv3.Metrics = append(multiv3.Metrics, fr3)
+				multiv2.Metrics = append(multiv2.Metrics, fr2)
+				multiv3.Metrics = append(multiv3.Metrics, fr3)
+			}
 		}
+	}
+
+	if returnCode == http.StatusNotFound {
+		wr.WriteHeader(http.StatusNotFound)
+		_, _ = wr.Write([]byte("Not found"))
+		return
 	}
 
 	if cfg.Listener.ShuffleResults {
