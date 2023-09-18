@@ -313,6 +313,7 @@ func e2eTest(logger *zap.Logger, noapp, breakOnError bool) bool {
 			failed = true
 			logger.Error("test failed",
 				zap.Errors("failures", failures),
+				zap.String("url", t.URL), zap.String("type", t.Type), zap.String("body", t.Body),
 			)
 			for _, v := range runningApps {
 				if !v.IsRunning() {

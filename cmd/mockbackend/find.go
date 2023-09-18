@@ -72,15 +72,33 @@ func (cfg *listener) findHandler(wr http.ResponseWriter, req *http.Request) {
 		Metrics: []carbonapi_v3_pb.GlobResponse{},
 	}
 
+	returnCode := http.StatusOK
 	if query[0] != "*" {
 		for m := range cfg.Listener.Expressions {
 			globMatches := []carbonapi_v3_pb.GlobMatch{}
 
-			for _, metric := range cfg.Expressions[m].Data {
-				globMatches = append(globMatches, carbonapi_v3_pb.GlobMatch{
-					Path:   metric.MetricName,
-					IsLeaf: true,
-				})
+			returnCode = http.StatusNotFound
+			if response, ok := cfg.Expressions[m]; ok {
+				if response.ReplyDelayMS > 0 {
+					delay := time.Duration(response.ReplyDelayMS) * time.Millisecond
+					time.Sleep(delay)
+				}
+				if response.HttpCode == http.StatusNotFound {
+					returnCode = http.StatusNotFound
+				} else if response.HttpCode != 0 && response.HttpCode != http.StatusOK {
+					// return first error
+					returnCode = response.HttpCode
+					http.Error(wr, http.StatusText(returnCode), returnCode)
+					return
+				} else {
+					returnCode = http.StatusOK
+					for _, metric := range response.Data {
+						globMatches = append(globMatches, carbonapi_v3_pb.GlobMatch{
+							Path:   metric.MetricName,
+							IsLeaf: true,
+						})
+					}
+				}
 			}
 			multiGlobs.Metrics = append(multiGlobs.Metrics,
 				carbonapi_v3_pb.GlobResponse{
@@ -96,8 +114,18 @@ func (cfg *listener) findHandler(wr http.ResponseWriter, req *http.Request) {
 				delay := time.Duration(response.ReplyDelayMS) * time.Millisecond
 				time.Sleep(delay)
 			}
-			for _, metric := range response.Data {
-				returnMap[metric.MetricName] = struct{}{}
+			if response.HttpCode == http.StatusNotFound {
+				returnCode = http.StatusNotFound
+			} else if response.HttpCode != 0 && response.HttpCode != http.StatusOK {
+				// return first error
+				returnCode = response.HttpCode
+				http.Error(wr, http.StatusText(returnCode), returnCode)
+				return
+			} else {
+				returnCode = http.StatusOK
+				for _, metric := range response.Data {
+					returnMap[metric.MetricName] = struct{}{}
+				}
 			}
 		}
 
@@ -121,6 +149,12 @@ func (cfg *listener) findHandler(wr http.ResponseWriter, req *http.Request) {
 		rand.Shuffle(len(multiGlobs.Metrics), func(i, j int) {
 			multiGlobs.Metrics[i], multiGlobs.Metrics[j] = multiGlobs.Metrics[j], multiGlobs.Metrics[i]
 		})
+	}
+
+	if returnCode == http.StatusNotFound {
+		// return 404 when no data
+		http.Error(wr, http.StatusText(returnCode), returnCode)
+		return
 	}
 
 	logger.Info("will return", zap.Any("response", multiGlobs))
