@@ -11,6 +11,7 @@ type Response struct {
 	ReplyDelayMS   int      `yaml:"replyDelayMS"`
 	PathExpression string   `yaml:"pathExpression"`
 	Data           []Metric `yaml:"data"`
+	Tags           []string `yaml:"tags"`
 }
 
 type Metric struct {

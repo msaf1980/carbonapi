@@ -94,6 +94,8 @@ func main() {
 			mux.HandleFunc("/render/", listener.renderHandler)
 			mux.HandleFunc("/metrics/find", listener.findHandler)
 			mux.HandleFunc("/metrics/find/", listener.findHandler)
+			mux.HandleFunc("/tags/autoComplete/values", listener.tagsValuesHandler)
+			mux.HandleFunc("/tags/autoComplete/tags", listener.tagsNamesHandler)
 
 			wg.Add(1)
 			wgStart.Add(1)

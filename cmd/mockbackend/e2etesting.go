@@ -49,9 +49,10 @@ type ExpectedResponse struct {
 }
 
 type ExpectedResult struct {
-	SHA256      []string              `yaml:"sha256"`
-	Metrics     []RenderResponse      `json:"metrics" yaml:"metrics"`
-	MetricsFind []MetricsFindResponse `json:"metricsFind" yaml:"metricsFind"`
+	SHA256            []string              `yaml:"sha256"`
+	Metrics           []RenderResponse      `json:"metrics" yaml:"metrics"`
+	MetricsFind       []MetricsFindResponse `json:"metricsFind" yaml:"metricsFind"`
+	TagsAutocompelete []string              `json:"tagsAutocompelete" yaml:"tagsAutocompelete"`
 }
 
 type RenderResponse struct {
@@ -223,8 +224,8 @@ func doTest(logger *zap.Logger, t *Query) []error {
 	contentType = resp.Header.Get("Content-Type")
 	if t.ExpectedResponse.ContentType != contentType {
 		failures = append(failures,
-			merry2.Errorf("unexpected content-type, got %v, expected %v",
-				contentType,
+			merry2.Errorf("unexpected content-type, got %v (code %d), expected %v",
+				contentType, resp.StatusCode,
 				t.ExpectedResponse.ContentType,
 			),
 		)
@@ -287,6 +288,33 @@ func doTest(logger *zap.Logger, t *Query) []error {
 					failures = append(failures, err)
 				}
 			}
+		} else if strings.HasPrefix(t.URL, "/tags/autoComplete/") {
+			// tags/autoComplete
+			res := make([]string, 0, 1)
+			err := json.Unmarshal(b, &res)
+			if err != nil {
+				err = merry2.Prepend(err, "failed to parse response")
+				failures = append(failures, err)
+				return failures
+			}
+
+			if len(t.ExpectedResponse.ExpectedResults) == 0 {
+				return failures
+			}
+
+			if len(res) != len(t.ExpectedResponse.ExpectedResults[0].TagsAutocompelete) {
+				failures = append(failures, merry2.Errorf("unexpected amount of results, got %v, expected %v",
+					len(res),
+					len(t.ExpectedResponse.ExpectedResults[0].TagsAutocompelete)))
+				return failures
+			}
+
+			for i := range res {
+				if res[i] != t.ExpectedResponse.ExpectedResults[0].TagsAutocompelete[i] {
+					err = merry2.Prependf(err, "tags[%d] are not equal, got=`%+v`, expected=`%+v`", i, res[i], t.ExpectedResponse.ExpectedResults[0].Metrics[i])
+					failures = append(failures, err)
+				}
+			}
 
 		} else {
 			// render
@@ -317,9 +345,13 @@ func doTest(logger *zap.Logger, t *Query) []error {
 				}
 			}
 		}
-
 	default:
-		failures = append(failures, merry2.Errorf("unsupported content-type: got '%v'", contentType))
+		if !strings.HasPrefix(t.URL, "/tags/autoComplete/") ||
+			(contentType == "text/plain; charset=utf-8" &&
+				resp.StatusCode == http.StatusNotFound &&
+				t.ExpectedResponse.HttpCode == http.StatusNotFound) {
+			failures = append(failures, merry2.Errorf("unsupported content-type: got '%v'", contentType))
+		}
 	}
 
 	return failures
