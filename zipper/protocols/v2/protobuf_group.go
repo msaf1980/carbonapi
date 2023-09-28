@@ -50,6 +50,7 @@ type ClientProtoV2Group struct {
 	timeout              types.Timeouts
 	maxTries             int
 	maxMetricsPerRequest int
+	requireSuccessAll    bool
 
 	httpQuery *helper.HttpQuery
 }
@@ -58,13 +59,13 @@ func (c *ClientProtoV2Group) Children() []types.BackendServer {
 	return []types.BackendServer{c}
 }
 
-func NewWithLimiter(logger *zap.Logger, config types.BackendV2, tldCacheDisabled bool, l limiter.ServerLimiter) (types.BackendServer, merry.Error) {
+func NewWithLimiter(logger *zap.Logger, config types.BackendV2, tldCacheDisabled, requireSuccessAll bool, l limiter.ServerLimiter) (types.BackendServer, merry.Error) {
 	logger = logger.With(zap.String("type", "protoV2Group"), zap.String("name", config.GroupName))
 
 	httpClient := helper.GetHTTPClient(logger, config)
 
 	httpLimiter := limiter.NewServerLimiter(config.Servers, *config.ConcurrencyLimit)
-	httpQuery := helper.NewHttpQuery(config.GroupName, config.Servers, *config.MaxTries, httpLimiter, httpClient, httpHeaders.ContentTypeCarbonAPIv2PB)
+	httpQuery := helper.NewHttpQuery(config.GroupName, config.Servers, *config.MaxTries, config.RetryCodes, types.LBMethodFromStringMust(config.LBMethod), httpLimiter, httpClient, httpHeaders.ContentTypeCarbonAPIv2PB)
 
 	c := &ClientProtoV2Group{
 		groupName:            config.GroupName,
@@ -72,6 +73,7 @@ func NewWithLimiter(logger *zap.Logger, config types.BackendV2, tldCacheDisabled
 		timeout:              *config.Timeouts,
 		maxTries:             *config.MaxTries,
 		maxMetricsPerRequest: *config.MaxBatchSize,
+		requireSuccessAll:    requireSuccessAll,
 
 		client:  httpClient,
 		limiter: l,
@@ -82,7 +84,7 @@ func NewWithLimiter(logger *zap.Logger, config types.BackendV2, tldCacheDisabled
 	return c, nil
 }
 
-func New(logger *zap.Logger, config types.BackendV2, tldCacheDisabled bool) (types.BackendServer, merry.Error) {
+func New(logger *zap.Logger, config types.BackendV2, tldCacheDisabled, requireSuccessAll bool) (types.BackendServer, merry.Error) {
 	if config.ConcurrencyLimit == nil {
 		return nil, types.ErrConcurrencyLimitNotSet
 	}
@@ -91,7 +93,7 @@ func New(logger *zap.Logger, config types.BackendV2, tldCacheDisabled bool) (typ
 	}
 	limiter := limiter.NewServerLimiter(config.Servers, *config.ConcurrencyLimit)
 
-	return NewWithLimiter(logger, config, tldCacheDisabled, limiter)
+	return NewWithLimiter(logger, config, tldCacheDisabled, requireSuccessAll, limiter)
 }
 
 func (c ClientProtoV2Group) MaxMetricsPerRequest() int {
@@ -151,6 +153,9 @@ func (c *ClientProtoV2Group) Fetch(ctx context.Context, request *protov3.MultiFe
 			} else {
 				e = e.WithCause(err)
 			}
+			if c.requireSuccessAll {
+				break
+			}
 			continue
 		}
 
@@ -162,6 +167,9 @@ func (c *ClientProtoV2Group) Fetch(ctx context.Context, request *protov3.MultiFe
 				e = types.ErrUnmarshalFailed.WithCause(marshalErr)
 			} else {
 				e = e.WithCause(marshalErr)
+			}
+			if c.requireSuccessAll {
+				break
 			}
 			continue
 		}
@@ -191,6 +199,10 @@ func (c *ClientProtoV2Group) Fetch(ctx context.Context, request *protov3.MultiFe
 		logger.Warn("errors occurred while getting results",
 			zap.Any("errors", e),
 		)
+		if c.requireSuccessAll {
+			// reset fetched metrics
+			r.Metrics = nil
+		}
 		return &r, stats, e
 	}
 	return &r, stats, nil

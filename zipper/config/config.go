@@ -26,6 +26,7 @@ type Config struct {
 	MaxTries                  int              `mapstructure:"maxTries"`
 	DoMultipleRequestsIfSplit bool             `mapstructure:"doMultipleRequestsIfSplit"`
 	RequireSuccessAll         bool             `mapstructure:"requireSuccessAll"` // require full success for upstreams queries (for multi-target query)
+	RetryCodes                []int            `mapstructure:"retryCodes"`
 
 	ExpireDelaySec       int32
 	TLDCacheDisabled     bool `mapstructure:"tldCacheDisabled"`
@@ -107,6 +108,7 @@ func SanitizeConfig(logger *zap.Logger, oldConfig Config) *Config {
 					KeepAliveInterval:         &newConfig.KeepAliveInterval,
 					MaxIdleConnsPerHost:       &newConfig.MaxIdleConnsPerHost,
 					MaxTries:                  &newConfig.MaxTries,
+					RetryCodes:                newConfig.RetryCodes,
 					MaxBatchSize:              newConfig.MaxBatchSize,
 					IdleConnectionTimeout:     &defaultIdleConnTimeout,
 				},
@@ -116,6 +118,7 @@ func SanitizeConfig(logger *zap.Logger, oldConfig Config) *Config {
 			Timeouts:                  newConfig.Timeouts,
 			KeepAliveInterval:         newConfig.KeepAliveInterval,
 			MaxTries:                  newConfig.MaxTries,
+			RetryCodes:                newConfig.RetryCodes,
 			MaxBatchSize:              newConfig.MaxBatchSize,
 		}
 

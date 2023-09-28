@@ -31,6 +31,14 @@ var supportedLBMethods = map[string]LBMethod{
 	"all":        BroadcastLB,
 }
 
+func LBMethodFromStringMust(method string) LBMethod {
+	var m LBMethod
+	if err := m.FromString(method); err != nil {
+		panic(err)
+	}
+	return m
+}
+
 func (m *LBMethod) FromString(method string) error {
 	var ok bool
 	if *m, ok = supportedLBMethods[strings.ToLower(method)]; !ok {

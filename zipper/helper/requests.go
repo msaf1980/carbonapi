@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -214,19 +215,28 @@ type ServerResponse struct {
 	Response []byte
 }
 
+type pickNext func(uint64, *zap.Logger) (string, uint64)
+
 type HttpQuery struct {
-	groupName string
-	servers   []string
-	maxTries  int
-	limiter   limiter.ServerLimiter
-	client    *http.Client
-	encoding  string
+	groupName  string
+	servers    []string
+	maxTries   int
+	retryCodes map[int]bool
+	lbMethod   types.LBMethod
+
+	pickServer pickNext
+	limiter    limiter.ServerLimiter
+	client     *http.Client
+	encoding   string
 
 	counter uint64
 }
 
-func NewHttpQuery(groupName string, servers []string, maxTries int, limiter limiter.ServerLimiter, client *http.Client, encoding string) *HttpQuery {
-	return &HttpQuery{
+func NewHttpQuery(groupName string, servers []string, maxTries int, retryCodes []int, lbMethod types.LBMethod, limiter limiter.ServerLimiter, client *http.Client, encoding string) *HttpQuery {
+	if maxTries < 1 {
+		maxTries = 1
+	}
+	c := &HttpQuery{
 		groupName: groupName,
 		servers:   servers,
 		maxTries:  maxTries,
@@ -234,16 +244,38 @@ func NewHttpQuery(groupName string, servers []string, maxTries int, limiter limi
 		client:    client,
 		encoding:  encoding,
 	}
+	if maxTries > 1 {
+		if len(retryCodes) == 0 {
+			retryCodes = []int{http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout}
+		}
+		c.retryCodes = make(map[int]bool)
+		for _, code := range retryCodes {
+			c.retryCodes[code] = true
+		}
+	}
+
+	if len(c.servers) == 1 {
+		c.pickServer = c.pickOneServer
+	} else {
+		c.pickServer = c.pickRandomServer
+	}
+
+	return c
 }
 
-func (c *HttpQuery) pickServer(logger *zap.Logger) string {
-	if len(c.servers) == 1 {
-		// No need to do heavy operations here
-		return c.servers[0]
-	}
+func (c *HttpQuery) pickOneServer(n uint64, logger *zap.Logger) (string, uint64) {
+	return c.servers[0], 0
+}
+
+func (c *HttpQuery) pickRandomServer(idx uint64, logger *zap.Logger) (string, uint64) {
 	logger = logger.With(zap.String("function", "picker"))
 	counter := atomic.AddUint64(&(c.counter), 1)
-	idx := counter % uint64(len(c.servers))
+	// TODO: upstream failure detection
+	if idx == math.MaxUint64 {
+		idx = counter % uint64(len(c.servers))
+	} else {
+		idx = (idx + 1) % uint64(len(c.servers))
+	}
 	srv := c.servers[int(idx)]
 	logger.Debug("picked",
 		zap.Uint64("counter", counter),
@@ -251,7 +283,7 @@ func (c *HttpQuery) pickServer(logger *zap.Logger) string {
 		zap.String("server", srv),
 	)
 
-	return srv
+	return srv, idx
 }
 
 func (c *HttpQuery) doRequest(ctx context.Context, logger *zap.Logger, server, uri string, r types.Request) (*ServerResponse, merry.Error) {
@@ -342,15 +374,17 @@ func (c *HttpQuery) doRequest(ctx context.Context, logger *zap.Logger, server, u
 }
 
 func (c *HttpQuery) DoQuery(ctx context.Context, logger *zap.Logger, uri string, r types.Request) (*ServerResponse, merry.Error) {
-	maxTries := c.maxTries
-	if len(c.servers) > maxTries {
-		maxTries = len(c.servers)
-	}
+	// not needed, can produce overload on busy cluster
+	// if len(c.servers) > maxTries {
+	// 	maxTries = len(c.servers)
+	// }
 
 	e := types.ErrFailedToFetch.WithValue("uri", uri)
 	code := http.StatusInternalServerError
-	for try := 0; try < maxTries; try++ {
-		server := c.pickServer(logger)
+	var idx uint64 = math.MaxUint64
+	var server string
+	for try := 0; try < c.maxTries; try++ {
+		server, idx = c.pickServer(idx, logger)
 		res, err := c.doRequest(ctx, logger, server, uri, r)
 		if err != nil {
 			logger.Debug("have errors",
@@ -359,7 +393,12 @@ func (c *HttpQuery) DoQuery(ctx context.Context, logger *zap.Logger, uri string,
 
 			e = e.WithCause(err).WithHTTPCode(merry.HTTPCode(err))
 			code = merry.HTTPCode(err)
-			continue
+			if c.maxTries > 1 {
+				if _, ok := c.retryCodes[code]; ok {
+					continue
+				}
+				break
+			}
 		}
 
 		return res, nil
@@ -388,7 +427,12 @@ func (c *HttpQuery) DoQueryToAll(ctx context.Context, logger *zap.Logger, uri st
 
 				e = e.WithCause(err)
 				code = merry.HTTPCode(err)
-				continue
+				if c.maxTries > 1 {
+					if _, ok := c.retryCodes[code]; ok {
+						continue
+					}
+					break
+				}
 			}
 
 			res[i] = response

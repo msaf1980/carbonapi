@@ -5,7 +5,7 @@ test:
           binary: "./carbonapi"
           args:
               - "-config"
-              - "./cmd/mockbackend/testcases/render_error_all_multi/carbonapi.yaml"
+              - "./cmd/mockbackend/testcases/render_error_all_multi_rr/carbonapi.yaml"
     queries:
         - endpoint: "http://127.0.0.1:8081"
           type: "GET"
@@ -35,15 +35,18 @@ test:
               expectedResults:
                       - metrics:
                           - target: "a"
-                            datapoints: [[0,1],[1,2],[2,3],[2,4],[3,5]]              
+                            datapoints: [[0,1],[1,2],[2,3],[2,4],[3,5]]
 
-        # timeout
         - endpoint: "http://127.0.0.1:8081"
           type: "GET"
           URL: "/render/?target=c&format=json"
           expectedResponse:
-              httpCode: 503
-              contentType: "text/plain; charset=utf-8"
+            httpCode: 200
+            contentType: "application/json"
+            expectedResults:
+                      - metrics:
+                          - target: "c"
+                            datapoints: [[0,1],[1,2],[2,3],[2,4],[4,5]]
 
         # 503
         - endpoint: "http://127.0.0.1:8081"
@@ -60,18 +63,36 @@ test:
           expectedResponse:
               httpCode: 503
               contentType: "text/plain; charset=utf-8"
-
+   
         # partial success
-        ## TODO: must fail, target d failed
+        # TODO: must fail, target d failed
         - endpoint: "http://127.0.0.1:8081"
           type: "GET"
           URL: "/render/?target=divideSeries(a,d)&format=json"
           expectedResponse:
               httpCode: 503
-              contentType: "text/plain; charset=utf-8"
+              contentType: "text/plain; charset=utf-8"          
 
 listeners:
       - address: ":9070"
+        expressions:
+            "a":
+                pathExpression: "a"
+                emptyBody: true
+                httpCode: 503        
+
+            # timeout
+            "c":
+                pathExpression: "c"
+                emptyBody: true
+                httpCode: 503
+
+            "d":
+                pathExpression: "d"
+                emptyBody: true
+                httpCode: 503
+
+      - address: ":9071"
         expressions:
             "a":
                 pathExpression: "a"
@@ -79,15 +100,11 @@ listeners:
                     - metricName: "a"
                       values: [0,1,2,2,3]
 
-            # timeout
             "c":
-                pathExpression: "b"
-                emptyBody: true
-                httpCode: 404
-                replyDelayMS: 7000
+                pathExpression: "c"
                 data:
                     - metricName: "c"
-                      values: [0,1,2,2,3]
+                      values: [0,1,2,2,4]
 
             "d":
                 pathExpression: "d"

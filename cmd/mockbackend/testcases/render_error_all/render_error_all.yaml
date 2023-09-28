@@ -67,12 +67,8 @@ test:
           type: "GET"
           URL: "/render/?target=divideSeries(a,d)&format=json"
           expectedResponse:
-              httpCode: 200
-              contentType: "application/json"
-              expectedResults:
-                      - metrics:
-                          - target: "divideSeries(a,MISSING)"
-                            datapoints: [[nan,1],[nan,2],[nan,3],[nan,4],[nan,5]]
+              httpCode: 503
+              contentType: "text/plain; charset=utf-8"
 
 listeners:
       - address: ":9070"

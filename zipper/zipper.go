@@ -46,7 +46,7 @@ type Zipper struct {
 	logger *zap.Logger
 }
 
-func createBackendsV2(logger *zap.Logger, backends types.BackendsV2, expireDelaySec int32, tldCacheDisabled bool) ([]types.BackendServer, merry.Error) {
+func createBackendsV2(logger *zap.Logger, backends types.BackendsV2, expireDelaySec int32, tldCacheDisabled, requireSuccessAll bool) ([]types.BackendServer, merry.Error) {
 	backendServers := make([]types.BackendServer, 0)
 	var e merry.Error
 	timeouts := backends.Timeouts
@@ -65,6 +65,9 @@ func createBackendsV2(logger *zap.Logger, backends types.BackendsV2, expireDelay
 		}
 		if backend.MaxTries == nil {
 			backend.MaxTries = &tries
+		}
+		if backend.RetryCodes == nil {
+			backend.RetryCodes = backends.RetryCodes
 		}
 		if backend.MaxBatchSize == nil {
 			backend.MaxBatchSize = maxBatchSize
@@ -110,7 +113,7 @@ func createBackendsV2(logger *zap.Logger, backends types.BackendsV2, expireDelay
 			)
 		}
 		if lbMethod == types.RoundRobinLB {
-			backendServer, e = backendInit(logger, backend, tldCacheDisabled)
+			backendServer, e = backendInit(logger, backend, tldCacheDisabled, requireSuccessAll)
 			if e != nil {
 				return nil, e
 			}
@@ -121,7 +124,7 @@ func createBackendsV2(logger *zap.Logger, backends types.BackendsV2, expireDelay
 			for _, server := range backend.Servers {
 				config.Servers = []string{server}
 				config.GroupName = server
-				backendServer, e = backendInit(logger, config, tldCacheDisabled)
+				backendServer, e = backendInit(logger, config, tldCacheDisabled, requireSuccessAll)
 				if e != nil {
 					return nil, e
 				}
@@ -154,13 +157,12 @@ func NewZipper(sender func(*types.Stats), cfg *config.Config, logger *zap.Logger
 		cfg = config.SanitizeConfig(logger, *cfg)
 	}
 
-	backends, err := createBackendsV2(logger, cfg.BackendsV2, int32(cfg.InternalRoutingCache.Seconds()), cfg.TLDCacheDisabled)
+	backends, err := createBackendsV2(logger, cfg.BackendsV2, int32(cfg.InternalRoutingCache.Seconds()), cfg.TLDCacheDisabled, cfg.RequireSuccessAll)
 	if err != nil {
 		logger.Fatal("errors while initialing zipper store backend",
 			zap.Any("error", err),
 		)
 	}
-
 
 	logger.Error("DEBUG ERROR LOGGGGG", zap.Any("cfg", cfg))
 	broadcastGroup, err := broadcast.New(
