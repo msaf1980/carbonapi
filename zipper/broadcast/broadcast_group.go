@@ -506,7 +506,7 @@ func (bg *BroadcastGroup) Fetch(ctx context.Context, request *protov3.MultiFetch
 		// check error codes
 		code, errors := helper.MergeHttpErrors(result.Err)
 		if len(errors) > 0 {
-			err := types.ErrFailedToFetch.WithHTTPCode(code).WithMessage(strings.Join(errors, "\n"))
+			err := types.ErrFailedToFetch.WithHTTPCode(code)
 			logger.Debug("errors while fetching data from backends",
 				zap.Int("httpCode", code),
 				zap.Strings("errors", errors),

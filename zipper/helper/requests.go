@@ -142,13 +142,16 @@ func MergeHttpErrors(errors []merry.Error) (int, []string) {
 		if c == nil {
 			c = err
 		}
-
-		code := merry.HTTPCode(err)
+		code := merry.HTTPCode(c)
 		if code == http.StatusNotFound {
 			continue
-		} else if code == http.StatusInternalServerError && merry.Is(c, parser.ErrInvalidArg) {
-			// check for invalid args, see applyByNode rewrite function
-			code = http.StatusBadRequest
+		} else if code == http.StatusInternalServerError {
+			if merry.Is(c, parser.ErrInvalidArg) {
+				// check for invalid args, see applyByNode rewrite function
+				code = http.StatusBadRequest
+			} else if _, ok := c.(net.Error); ok {
+				code = http.StatusServiceUnavailable
+			}
 		}
 
 		if msg := merry.Message(c); len(msg) > 0 {
@@ -374,11 +377,6 @@ func (c *HttpQuery) doRequest(ctx context.Context, logger *zap.Logger, server, u
 }
 
 func (c *HttpQuery) DoQuery(ctx context.Context, logger *zap.Logger, uri string, r types.Request) (*ServerResponse, merry.Error) {
-	// not needed, can produce overload on busy cluster
-	// if len(c.servers) > maxTries {
-	// 	maxTries = len(c.servers)
-	// }
-
 	e := types.ErrFailedToFetch.WithValue("uri", uri)
 	code := http.StatusInternalServerError
 	var idx uint64 = math.MaxUint64
