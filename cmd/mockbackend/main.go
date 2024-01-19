@@ -21,7 +21,7 @@ type MainConfig struct {
 
 type Listener struct {
 	Address        string              `yaml:"address"`
-	Code           int                 `yaml:"httpCode"`
+	Code           int                 `yaml:"httpCode"` // global responce code
 	ShuffleResults bool                `yaml:"shuffleResults"`
 	EmptyBody      bool                `yaml:"emptyBody"`
 	Expressions    map[string]Response `yaml:"expressions"`
@@ -36,6 +36,7 @@ type listener struct {
 
 func main() {
 	config := flag.String("config", "average.yaml", "yaml where it would be possible to get data")
+	verbose := flag.Bool("verbose", false, "verbose reporting")
 	testonly := flag.Bool("testonly", false, "run only unit test")
 	noapp := flag.Bool("noapp", false, "do not run application")
 	test := flag.Bool("test", false, "run unit test if present")
@@ -120,7 +121,7 @@ func main() {
 
 	failed := false
 	if cfg.Test != nil && (*test || *testonly) {
-		failed = e2eTest(logger, *noapp, *breakOnError)
+		failed = e2eTest(logger, *noapp, *breakOnError, *verbose)
 	}
 
 	if !*testonly {
