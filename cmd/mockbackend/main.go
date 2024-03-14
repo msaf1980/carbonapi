@@ -51,12 +51,14 @@ func main() {
 		logger.Fatal("failed to get config, it should be non-null")
 	}
 
-	d, err := os.ReadFile(*config)
+	f, err := os.Open(*config)
 	if err != nil {
 		logger.Fatal("failed to read config", zap.Error(err))
 	}
 
-	err = yaml.Unmarshal(d, &cfg)
+	decoder := yaml.NewDecoder(f)
+	decoder.SetStrict(true)
+	err = decoder.Decode(&cfg)
 	if err != nil {
 		logger.Fatal("failed to read config", zap.Error(err))
 		return
@@ -95,6 +97,8 @@ func main() {
 			mux.HandleFunc("/render/", listener.renderHandler)
 			mux.HandleFunc("/metrics/find", listener.findHandler)
 			mux.HandleFunc("/metrics/find/", listener.findHandler)
+			mux.HandleFunc("/tags/autoComplete/values", listener.tagsValuesHandler)
+			mux.HandleFunc("/tags/autoComplete/tags", listener.tagsNamesHandler)
 
 			wg.Add(1)
 			wgStart.Add(1)

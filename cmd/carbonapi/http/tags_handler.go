@@ -21,14 +21,15 @@ import (
 func tagHandler(w http.ResponseWriter, r *http.Request) {
 	t0 := time.Now()
 	uuid := uuid.NewV4()
+	carbonapiUUID := uuid.String()
 
 	// TODO: Migrate to context.WithTimeout
-	ctx := utilctx.SetUUID(r.Context(), uuid.String())
+	ctx := utilctx.SetUUID(r.Context(), carbonapiUUID)
 	requestHeaders := utilctx.GetLogHeaders(ctx)
 	username, _, _ := r.BasicAuth()
 
 	logger := zapwriter.Logger("tag").With(
-		zap.String("carbonapi_uuid", uuid.String()),
+		zap.String("carbonapi_uuid", carbonapiUUID),
 		zap.String("username", username),
 		zap.Any("request_headers", requestHeaders),
 	)
@@ -39,7 +40,7 @@ func tagHandler(w http.ResponseWriter, r *http.Request) {
 	var accessLogDetails = &carbonapipb.AccessLogDetails{
 		Handler:        "tags",
 		Username:       username,
-		CarbonapiUUID:  uuid.String(),
+		CarbonapiUUID:  carbonapiUUID,
 		URL:            r.URL.Path,
 		PeerIP:         srcIP,
 		PeerPort:       srcPort,
@@ -57,8 +58,7 @@ func tagHandler(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		logAsError = true
-		w.Header().Set("Content-Type", contentTypeJSON)
-		_, _ = w.Write([]byte{'[', ']'})
+		setError(w, accessLogDetails, err.Error(), http.StatusBadRequest, carbonapiUUID)
 		return
 	}
 
@@ -93,17 +93,15 @@ func tagHandler(w http.ResponseWriter, r *http.Request) {
 	} else if strings.HasSuffix(r.URL.Path, "values") || strings.HasSuffix(r.URL.Path, "values/") {
 		res, err = config.Config.ZipperInstance.TagValues(ctx, rawQuery, limit)
 	} else {
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-		accessLogDetails.HTTPCode = http.StatusNotFound
+		setError(w, accessLogDetails, http.StatusText(http.StatusNotFound), http.StatusNotFound, carbonapiUUID)
 		return
 	}
 
 	// TODO(civil): Implement stats
 	if err != nil && !merry.Is(err, types.ErrNoMetricsFetched) && !merry.Is(err, types.ErrNonFatalErrors) {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		accessLogDetails.HTTPCode = http.StatusInternalServerError
-		accessLogDetails.Reason = err.Error()
+		code := merry.HTTPCode(err)
 		logAsError = true
+		setError(w, accessLogDetails, err.Error(), code, carbonapiUUID)
 		return
 	}
 
@@ -115,15 +113,13 @@ func tagHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		accessLogDetails.HTTPCode = http.StatusInternalServerError
-		accessLogDetails.Reason = err.Error()
 		logAsError = true
+		setError(w, accessLogDetails, err.Error(), http.StatusInternalServerError, carbonapiUUID)
 		return
 	}
 
 	w.Header().Set("Content-Type", contentTypeJSON)
-	w.Header().Set(ctxHeaderUUID, uuid.String())
+	w.Header().Set(ctxHeaderUUID, carbonapiUUID)
 	_, _ = w.Write(b)
 	accessLogDetails.Runtime = time.Since(t0).Seconds()
 	accessLogDetails.HTTPCode = http.StatusOK
