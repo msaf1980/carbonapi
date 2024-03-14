@@ -81,7 +81,6 @@ listeners:
             # timeout
             "c":
                 pathExpression: "b"
-                emptyBody: true
                 code: 404
                 replyDelayMS: 7000
                 data:
@@ -90,5 +89,4 @@ listeners:
 
             "d":
                 pathExpression: "d"
-                emptyBody: true
                 code: 503

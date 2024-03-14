@@ -103,18 +103,15 @@ listeners:
         expressions:
             "a":
                 pathExpression: "a"
-                emptyBody: true
                 code: 503        
 
             # 503
             "c":
                 pathExpression: "c"
-                mptyBody: true
                 code: 503
 
             "d":
                 pathExpression: "d"
-                emptyBody: true
                 code: 503
 
       - address: ":9071"
@@ -133,5 +130,4 @@ listeners:
 
             "d":
                 pathExpression: "d"
-                emptyBody: true
                 code: 503

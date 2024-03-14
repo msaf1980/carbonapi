@@ -25,5 +25,4 @@ listeners:
           expressions:
                 "a":
                     pathExpression: "a"
-                    emptyBody: true
-                    httpCode: 404
+                    code: 404
